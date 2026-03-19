@@ -1,0 +1,1017 @@
+
+import React, { useState, useMemo, useRef } from 'react';
+import { AgendaItem, User, AgendaIssue, Media } from '../types';
+import { PlusCircleIcon, TrashIcon, CheckCircleIcon, CalendarDaysIcon, BellIcon, RefreshIcon, XIcon, CameraIcon, CameraIcon as PhotoIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, PrinterIcon, PencilIcon } from './icons';
+import { generateUUID } from '../App';
+import { fetchWithRetry, SCRIPT_URL } from '../utils/api';
+import Modal from './Modal';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+interface PersonalAgendaProps {
+  user: User;
+  agenda: AgendaItem[];
+  agendaIssues?: AgendaIssue[];
+  onUpdateAgenda: (items: AgendaItem[]) => void;
+  onUpdateAgendaIssues: (items: AgendaIssue[]) => void;
+  viewMode?: 'REMINDERS' | 'LIST';
+}
+
+const compressImage = (file: File): Promise<{ base64: string; mimeType: string }> => {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+       const reader = new FileReader();
+       reader.readAsDataURL(file);
+       reader.onload = () => resolve({ base64: reader.result as string, mimeType: file.type });
+       reader.onerror = error => reject(error);
+       return;
+    }
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target?.result as string; };
+    reader.onerror = (err) => reject(err);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      const MAX_SIZE = 1280;
+      if (width > height) {
+        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+      } else {
+        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+      resolve({ base64: compressedBase64, mimeType: 'image/jpeg' });
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+const getDisplayableDriveUrl = (url: string): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)|docs\.google\.com\/uc\?id=)([a-zA-Z0-9_-]{25,})/;
+  const match = url.match(driveRegex);
+  if (match && match[1]) return `https://lh3.googleusercontent.com/d/${match[1]}`;
+  return url;
+};
+
+// Helper para pegar data local sem erro de fuso
+const getLocalYYYYMMDD = () => {
+    const now = new Date();
+    return now.toLocaleDateString('en-CA'); // Retorna YYYY-MM-DD local
+};
+
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIssues = [], onUpdateAgenda, onUpdateAgendaIssues, viewMode = 'REMINDERS' }) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [filter, setFilter] = useState<'PENDING' | 'DONE'>('PENDING');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // PDF Report Filters
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reportStatus, setReportStatus] = useState<'ALL' | 'PENDING' | 'RESOLVED'>('ALL');
+  const [reportClient, setReportClient] = useState('');
+
+  // Reminders Form State
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState('');
+
+  // Issues Form State
+  const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
+  const [issueClient, setIssueClient] = useState('');
+  const [issueDate, setIssueDate] = useState(getLocalYYYYMMDD());
+  const [formTopics, setFormTopics] = useState<{ id: string; description: string; media: Media[]; status: 'Pending' | 'Resolved'; date: string }[]>([
+    { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }
+  ]);
+  const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Media Viewer State
+  const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number } | null>(null);
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+
+  const uniqueClients = useMemo(() => {
+      const clients = new Set(agendaIssues.map(i => i.clientName));
+      return Array.from(clients).sort();
+  }, [agendaIssues]);
+
+  const sortedReminders = useMemo(() => {
+    return [...agenda]
+      .filter(item => filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Done')
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }, [agenda, filter]);
+
+  const sortedIssues = useMemo(() => {
+    return [...agendaIssues]
+      .filter(item => filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Resolved')
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [agendaIssues, filter]);
+
+  const calculateDaysOpen = (createdAt: string) => {
+    const start = new Date(createdAt);
+    const now = new Date();
+    const diff = Math.abs(now.getTime() - start.getTime());
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  };
+
+  const calculateDaysFromDate = (dateStr: string) => {
+      if (!dateStr) return 0;
+      const start = new Date(dateStr + 'T12:00:00Z'); // Meio dia para evitar pulo de fuso
+      const now = new Date();
+      now.setHours(12, 0, 0, 0);
+      const diff = now.getTime() - start.getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      return days < 0 ? 0 : days;
+  };
+
+  const clientSummaries = useMemo(() => {
+    const groups: Record<string, AgendaIssue[]> = {};
+    agendaIssues.forEach(issue => {
+      // Normalize old data
+      const normalized = issue.topics ? {
+          ...issue,
+          topics: issue.topics.map(t => ({
+              ...t,
+              date: t.date || issue.date // Fallback to issue date if topic date is missing
+          }))
+      } : {
+          ...issue,
+          topics: [{
+              id: issue.id, // Use issue ID as topic ID for stable virtual topic
+              description: (issue as any).description || '',
+              media: (issue as any).media || [],
+              status: (issue as any).status || 'Pending',
+              date: issue.date
+          }]
+      } as AgendaIssue;
+
+      if (!groups[normalized.clientName]) groups[normalized.clientName] = [];
+      groups[normalized.clientName].push(normalized);
+    });
+
+    return Object.entries(groups).map(([name, issues]) => {
+      // Filter topics based on the main filter (PENDING/DONE)
+      const filteredIssues = issues.map(issue => ({
+        ...issue,
+        topics: issue.topics.filter(t => filter === 'PENDING' ? t.status === 'Pending' : t.status === 'Resolved')
+      })).filter(issue => issue.topics.length > 0);
+      
+      if (filteredIssues.length === 0) return null;
+
+      // Find oldest issue for the summary
+      const oldest = [...filteredIssues].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+      const totalTopics = filteredIssues.reduce((sum, issue) => sum + issue.topics.length, 0);
+
+      return {
+        name,
+        oldestDate: oldest.date,
+        daysOpen: calculateDaysFromDate(oldest.date),
+        totalTopics,
+        issues: filteredIssues.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      };
+    }).filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => b.daysOpen - a.daysOpen);
+  }, [agendaIssues, filter]);
+
+  const handleAddReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title || !dueDate) return;
+
+    const newItem: AgendaItem = {
+      id: generateUUID(),
+      userId: user.id,
+      title: title.trim(),
+      description: description.trim(),
+      createdAt: new Date().toISOString(),
+      dueDate: new Date(dueDate).toISOString(),
+      status: 'Pending',
+      notified: false
+    };
+
+    onUpdateAgenda([newItem, ...agenda]);
+    setTitle('');
+    setDescription('');
+    setDueDate('');
+    setIsAdding(false);
+  };
+
+  const handleAddIssue = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!issueClient || !issueDate || formTopics.some(t => !t.description)) {
+        alert("Preencha o cliente, a data e a descrição de todos os tópicos.");
+        return;
+    }
+
+    if (editingIssueId) {
+        const updatedIssues = agendaIssues.map(issue => 
+            issue.id === editingIssueId 
+            ? { ...issue, clientName: issueClient.trim(), date: issueDate, topics: formTopics }
+            : issue
+        );
+        onUpdateAgendaIssues(updatedIssues);
+        setEditingIssueId(null);
+    } else {
+        const newIssue: AgendaIssue = {
+            id: generateUUID(),
+            userId: user.id,
+            clientName: issueClient.trim(),
+            date: issueDate,
+            topics: formTopics,
+            createdAt: new Date().toISOString()
+        };
+        onUpdateAgendaIssues([newIssue, ...agendaIssues]);
+    }
+
+    setIssueClient('');
+    setIssueDate(getLocalYYYYMMDD());
+    setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }]);
+    setIsAdding(false);
+  };
+
+  const handleEditIssue = (issue: AgendaIssue) => {
+      setEditingIssueId(issue.id);
+      setIssueClient(issue.clientName);
+      setIssueDate(issue.date);
+      
+      // Robust normalization for editing
+      const topics = issue.topics && issue.topics.length > 0 
+        ? issue.topics.map(t => ({ ...t, date: t.date || issue.date })) 
+        : [{ 
+            id: issue.id, 
+            description: (issue as any).description || '', 
+            media: (issue as any).media || [], 
+            status: (issue as any).status || 'Pending', 
+            date: issue.date 
+          }];
+          
+      setFormTopics(topics);
+      setIsAdding(true);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, topicId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingTopicId(topicId);
+    const tempId = generateUUID();
+    const localUrl = URL.createObjectURL(file);
+    const tempMedia: Media = { id: tempId, type: 'image', url: localUrl, name: file.name };
+    
+    setFormTopics(prev => prev.map(t => t.id === topicId ? { ...t, media: [...t.media, tempMedia] } : t));
+
+    try {
+      const { base64: base64Data, mimeType } = await compressImage(file);
+      const response = await fetchWithRetry(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
+      });
+      const result = await response.json();
+      if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+      
+      setFormTopics(prev => prev.map(t => t.id === topicId ? { 
+        ...t, 
+        media: t.media.map(m => m.id === tempId ? { ...m, url: result.url } : m) 
+      } : t));
+    } catch (error: any) {
+        alert(`Erro no upload: ${error.message}`);
+        setFormTopics(prev => prev.map(t => t.id === topicId ? { 
+            ...t, 
+            media: t.media.filter(m => m.id !== tempId) 
+        } : t));
+    } finally {
+        setUploadingTopicId(null);
+    }
+  };
+
+  const toggleStatus = (id: string) => {
+    const updated = agenda.map(item => 
+      item.id === id ? { ...item, status: (item.status === 'Pending' ? 'Done' : 'Pending') as 'Pending' | 'Done' } : item
+    );
+    onUpdateAgenda(updated);
+  };
+
+  const toggleTopicStatus = (issueId: string, topicId: string) => {
+    const updated = agendaIssues.map(issue => {
+        if (issue.id === issueId) {
+            // Robust normalization for status toggle
+            const topics = issue.topics && issue.topics.length > 0
+                ? issue.topics
+                : [{
+                    id: issue.id,
+                    description: (issue as any).description || '',
+                    media: (issue as any).media || [],
+                    status: (issue as any).status || 'Pending',
+                    date: issue.date
+                }];
+
+            return {
+                ...issue,
+                topics: topics.map(t => t.id === topicId ? { ...t, status: t.status === 'Pending' ? 'Resolved' : 'Pending' } : t)
+            };
+        }
+        return issue;
+    });
+    onUpdateAgendaIssues(updated);
+  };
+
+  const deleteItem = (id: string) => {
+    if (window.confirm("Deseja excluir permanentemente este lembrete da sua agenda?")) {
+      onUpdateAgenda(agenda.filter(i => i.id !== id));
+    }
+  };
+
+  const deleteIssue = (id: string) => {
+    if (window.confirm("Excluir esta pendência?")) {
+      onUpdateAgendaIssues(agendaIssues.filter(i => i.id !== id));
+    }
+  };
+
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF();
+    
+    // Filter issues based on date range if provided
+    let filteredIssues = agendaIssues.map(issue => {
+        // Normalize
+        const normalized = issue.topics ? {
+            ...issue,
+            topics: issue.topics.map(t => ({ ...t, date: t.date || issue.date }))
+        } : {
+            ...issue,
+            topics: [{
+                id: generateUUID(),
+                description: (issue as any).description || '',
+                media: (issue as any).media || [],
+                status: (issue as any).status || 'Pending',
+                date: issue.date
+            }]
+        } as AgendaIssue;
+
+        // Filter topics by status
+        return {
+            ...normalized,
+            topics: normalized.topics.filter(t => {
+                if (reportStatus === 'PENDING') return t.status === 'Pending';
+                if (reportStatus === 'RESOLVED') return t.status === 'Resolved';
+                return true;
+            })
+        };
+    }).filter(i => i.topics.length > 0);
+
+    if (startDate) {
+        filteredIssues = filteredIssues.filter(i => i.date >= startDate);
+    }
+    if (endDate) {
+        filteredIssues = filteredIssues.filter(i => i.date <= endDate);
+    }
+
+    // Filter by Client
+    if (reportClient) {
+        filteredIssues = filteredIssues.filter(i => i.clientName === reportClient);
+    }
+    
+    // Sort by date desc
+    filteredIssues.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Title
+    doc.setFontSize(18);
+    doc.text("Relatório de Pendências", 14, 20);
+    
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 28);
+    
+    let filterText = "";
+    if (startDate || endDate) {
+        const startStr = startDate ? new Date(startDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Início';
+        const endStr = endDate ? new Date(endDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Fim';
+        filterText += `Período: ${startStr} até ${endStr} | `;
+    }
+    filterText += `Status: ${reportStatus === 'ALL' ? 'Todos' : (reportStatus === 'PENDING' ? 'Pendentes' : 'Resolvidos')}`;
+    if (reportClient) filterText += ` | Cliente: ${reportClient}`;
+
+    doc.text(filterText, 14, 34);
+
+    const tableColumn = ["Data", "Dias", "Cliente", "Descrição", "Status"];
+    const tableRows: any[] = [];
+    
+    filteredIssues.forEach(issue => {
+        issue.topics.forEach((topic, idx) => {
+            const topicDays = calculateDaysFromDate(topic.date);
+            tableRows.push([
+                new Date(topic.date + 'T12:00:00Z').toLocaleDateString('pt-BR'),
+                `${topicDays}d`,
+                idx === 0 ? issue.clientName : '',
+                topic.description,
+                topic.status === 'Pending' ? 'Pendente' : 'Resolvido'
+            ]);
+        });
+    });
+
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [30, 41, 59] }, // slate-800
+        alternateRowStyles: { fillColor: [241, 245, 249] }, // slate-100
+    });
+
+    doc.save(`relatorio_pendencias_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const handleGeneratePDFWithPhotos = async () => {
+    setIsGenerating(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      let y = 20;
+
+      // Filter issues (same logic as handleGeneratePDF)
+      let filteredIssues = agendaIssues.map(issue => {
+          const normalized = issue.topics ? {
+              ...issue,
+              topics: issue.topics.map(t => ({ ...t, date: t.date || issue.date }))
+          } : {
+              ...issue,
+              topics: [{
+                  id: generateUUID(),
+                  description: (issue as any).description || '',
+                  media: (issue as any).media || [],
+                  status: (issue as any).status || 'Pending',
+                  date: issue.date
+              }]
+          } as AgendaIssue;
+
+          return {
+              ...normalized,
+              topics: normalized.topics.filter(t => {
+                  if (reportStatus === 'PENDING') return t.status === 'Pending';
+                  if (reportStatus === 'RESOLVED') return t.status === 'Resolved';
+                  return true;
+              })
+          };
+      }).filter(i => i.topics.length > 0);
+
+      if (startDate) filteredIssues = filteredIssues.filter(i => i.date >= startDate);
+      if (endDate) filteredIssues = filteredIssues.filter(i => i.date <= endDate);
+      if (reportClient) filteredIssues = filteredIssues.filter(i => i.clientName === reportClient);
+      
+      filteredIssues.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      const totalTopicsCount = filteredIssues.reduce((acc, issue) => acc + issue.topics.length, 0);
+
+      // Header Background (Light)
+      doc.setFillColor(241, 245, 249); // Slate-100
+      doc.rect(0, 0, pageWidth, 25, 'F');
+      
+      // Title inside header
+      const reportTitle = reportClient ? `Pendências - Obra: ${reportClient}` : "Relatório de Pendências";
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.text(reportTitle, margin, 14);
+      
+      // Generation Date inside header
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, margin, 20);
+      
+      y = 32;
+
+      // Filter Info
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139); // Slate-500
+      
+      let filterText = "";
+      if (startDate || endDate) {
+          const startStr = startDate ? new Date(startDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Início';
+          const endStr = endDate ? new Date(endDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Fim';
+          filterText += `Período: ${startStr} até ${endStr} | `;
+      }
+      filterText += `Status: ${reportStatus === 'ALL' ? 'Todos' : (reportStatus === 'PENDING' ? 'Pendentes' : 'Resolvidos')}`;
+      filterText += ` | Total de Pendências: ${totalTopicsCount}`;
+      doc.text(filterText, margin, y);
+      
+      y += 10;
+      doc.setTextColor(0, 0, 0); // Reset text color
+
+      let currentTopicIndex = 0;
+      for (const issue of filteredIssues) {
+          for (const topic of issue.topics) {
+              currentTopicIndex++;
+              // Check for page break (estimated minimum height for a block)
+              if (y > pageHeight - 100) {
+                  doc.addPage();
+                  y = 20;
+              }
+
+              const startY = y;
+              const padding = 5;
+              
+              // Description
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(11);
+              doc.setTextColor(0, 0, 0);
+              const splitDescription = doc.splitTextToSize(topic.description, pageWidth - 2 * margin - (padding * 2));
+              
+              // Start description below the top margin to leave space for the badge
+              const descY = y + padding + 8; 
+              doc.text(splitDescription, margin + padding, descY);
+              y = descY + (splitDescription.length * 5) + 2;
+
+              // Add Photos
+              if (topic.media && topic.media.length > 0) {
+                  const imgSize = 70;
+                  const gap = 5;
+                  let x = margin + padding;
+
+                  for (const media of topic.media) {
+                      if (x + imgSize > pageWidth - margin - padding) {
+                          x = margin + padding;
+                          y += imgSize + gap;
+                      }
+
+                      if (y + imgSize > pageHeight - margin) {
+                          // If we need a new page for photos, we close the current box and start a new one on the next page
+                          doc.setDrawColor(200);
+                          doc.rect(margin, startY, pageWidth - 2 * margin, y - startY + 2);
+                          
+                          doc.addPage();
+                          y = 20;
+                          x = margin + padding;
+                          // Note: This is a simplified approach, ideally the box would continue
+                      }
+
+                      try {
+                          const url = getDisplayableDriveUrl(media.url);
+                          const resp = await fetch(url);
+                          const blob = await resp.blob();
+                          const b64 = await blobToBase64(blob);
+                          doc.addImage(b64, 'JPEG', x, y, imgSize, imgSize, undefined, 'FAST');
+                          doc.setDrawColor(220);
+                          doc.rect(x, y, imgSize, imgSize);
+                          x += imgSize + gap;
+                      } catch (e) {
+                          console.error("Error adding image to PDF:", e);
+                      }
+                  }
+                  y += imgSize + padding + 5;
+              } else {
+                  y += padding + 5;
+              }
+              
+              // Draw the box around the entire topic (description + photos)
+              doc.setDrawColor(180);
+              doc.setLineWidth(0.2);
+              doc.rect(margin, startY, pageWidth - 2 * margin, y - startY);
+
+              // Counter Badge (X de Y) - Professional Badge attached to the top line
+              const counterText = `${currentTopicIndex} de ${totalTopicsCount}`;
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(7);
+              const counterWidth = doc.getTextWidth(counterText) + 6;
+              const badgeX = pageWidth - margin - counterWidth - 5;
+              const badgeY = startY - 2.5; // Overlapping the top line
+              
+              doc.setFillColor(30, 41, 59); // Slate-800
+              doc.roundedRect(badgeX, badgeY, counterWidth, 5, 1, 1, 'F');
+              
+              doc.setTextColor(255, 255, 255);
+              doc.text(counterText, badgeX + 3, badgeY + 3.5);
+              
+              y += 10; // Space between boxes
+          }
+      }
+
+      doc.save(`relatorio_pendencias_fotos_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar relatório com fotos.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fadeIn font-app max-w-5xl mx-auto font-normal">
+      {/* Header & Tabs */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+          <h2 className="text-xl font-normal text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+            <BellIcon className="w-6 h-6 text-blue-600" /> Agenda de {user.username}
+          </h2>
+          <p className="text-[10px] font-normal text-slate-400 uppercase tracking-widest">{viewMode === 'LIST' ? 'Lista Técnica de Pendências' : 'Compromissos Pessoais e Futuros'}</p>
+        </div>
+        
+        <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button 
+              onClick={() => setFilter('PENDING')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              Pendentes
+            </button>
+            <button 
+              onClick={() => setFilter('DONE')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              Histórico
+            </button>
+          </div>
+          <button 
+            onClick={() => {
+                setEditingIssueId(null);
+                setIssueClient('');
+                setIssueDate(getLocalYYYYMMDD());
+                setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }]);
+                setIsAdding(true);
+            }}
+            className="flex-grow sm:flex-none bg-blue-600 text-white px-5 py-2 rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            <PlusCircleIcon className="w-4 h-4" /> Novo Registro
+          </button>
+        </div>
+      </div>
+
+      {/* PDF Filters (Only for LIST view) */}
+      {viewMode === 'LIST' && !isAdding && (
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4">
+              <div>
+                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Início</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Fim</label>
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Status</label>
+                  <select value={reportStatus} onChange={e => setReportStatus(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 min-w-[120px]">
+                      <option value="ALL">Todos</option>
+                      <option value="PENDING">Somente Pendentes</option>
+                      <option value="RESOLVED">Somente Resolvidos</option>
+                  </select>
+              </div>
+              <div>
+                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Cliente</label>
+                  <select value={reportClient} onChange={e => setReportClient(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 min-w-[150px] max-w-[200px]">
+                      <option value="">Todos os Clientes</option>
+                      {uniqueClients.map(client => (
+                          <option key={client} value={client}>{client}</option>
+                      ))}
+                  </select>
+              </div>
+              <button onClick={handleGeneratePDF} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-slate-700 flex items-center gap-2 h-[34px]">
+                  <PrinterIcon className="w-4 h-4" /> Gerar Relatório PDF
+              </button>
+              <button 
+                onClick={handleGeneratePDFWithPhotos} 
+                disabled={isGenerating}
+                className="bg-blue-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-blue-700 flex items-center gap-2 h-[34px] disabled:opacity-50"
+              >
+                  <PhotoIcon className="w-4 h-4" /> {isGenerating ? 'Gerando...' : 'Relatório com Fotos'}
+              </button>
+          </div>
+      )}
+
+      {/* Forms Section */}
+      {isAdding && (
+        <Modal onClose={() => setIsAdding(false)}>
+          <div className="animate-fadeIn">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
+                  {viewMode === 'LIST' ? (editingIssueId ? 'Editar Pendência' : 'Registrar Pendência na Lista') : 'Novo Registro na Sua Agenda'}
+              </h3>
+            </div>
+          
+          {viewMode === 'LIST' ? (
+              <form onSubmit={handleAddIssue} className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Nome do Cliente</label>
+                        <input required value={issueClient} onChange={e => setIssueClient(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" placeholder="Ex: João da Silva..." />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Data da Pendência</label>
+                        <input required type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" />
+                    </div>
+                    
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <label className="block text-[10px] font-normal text-slate-500 uppercase tracking-wider">Tópicos da Pendência</label>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {formTopics.map((topic, index) => (
+                                <div key={topic.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 relative">
+                                    {formTopics.length > 1 && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setFormTopics(formTopics.filter(t => t.id !== topic.id))}
+                                            className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <div className="flex gap-3 flex-grow">
+                                            <span className="text-slate-400 font-bold text-sm mt-2">{index + 1}.</span>
+                                            <textarea 
+                                                required 
+                                                value={topic.description} 
+                                                onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, description: e.target.value } : t))}
+                                                className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
+                                                placeholder="Descreva o item da pendência..." 
+                                            />
+                                        </div>
+                                        <div className="sm:w-40">
+                                            <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
+                                            <input 
+                                                type="date" 
+                                                required 
+                                                value={topic.date} 
+                                                onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, date: e.target.value } : t))}
+                                                className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-2 pl-7">
+                                        {topic.media.map(m => (
+                                            <div key={m.id} className="relative w-16 h-16">
+                                                <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover rounded-lg border border-slate-200" />
+                                                <button type="button" onClick={() => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, media: t.media.filter(x => x.id !== m.id) } : t))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">&times;</button>
+                                            </div>
+                                        ))}
+                                        <label className={`w-16 h-16 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors ${uploadingTopicId === topic.id ? 'opacity-50' : ''}`}>
+                                            <CameraIcon className="w-5 h-5 text-slate-400" />
+                                            <span className="text-[7px] font-normal text-slate-400 uppercase mt-1">Anexar</span>
+                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, topic.id)} disabled={!!uploadingTopicId} />
+                                        </label>
+                                    </div>
+                                </div>
+                            ))}
+
+                            <button 
+                                type="button" 
+                                onClick={() => setFormTopics([...formTopics, { id: generateUUID(), description: '', media: [], status: 'Pending', date: issueDate }])}
+                                className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold uppercase text-[10px] hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <PlusCircleIcon className="w-4 h-4" /> Adicionar Tópico
+                            </button>
+                        </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
+                    <button type="submit" className="px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
+                        {editingIssueId ? 'Atualizar Pendência' : 'Salvar Pendência na Lista'}
+                    </button>
+                  </div>
+              </form>
+          ) : (
+              <form onSubmit={handleAddReminder} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">O que você precisa lembrar?</label>
+                    <input required value={title} onChange={e => setTitle(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" placeholder="Título do compromisso..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Data e Hora do Lembrete</label>
+                    <input required type="datetime-local" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Descrição Detalhada (Opcional)</label>
+                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-28 resize-none bg-slate-50 focus:bg-white transition-all" placeholder="Mais detalhes sobre esta tarefa..." />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
+                  <button type="submit" className="px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">Salvar na Agenda</button>
+                </div>
+              </form>
+          )}
+          </div>
+        </Modal>
+      )}
+
+      {/* List Content */}
+      <div className="space-y-4">
+        {viewMode === 'LIST' ? (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left font-normal border-collapse">
+                        <thead>
+                            <tr className="bg-slate-900 text-white text-[10px] md:text-[10px] uppercase tracking-widest font-normal">
+                                <th className="p-4 w-32">Data</th>
+                                <th className="p-4">Cliente</th>
+                                <th className="p-4 w-24 text-center">Dias</th>
+                                <th className="p-4 w-24 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-[14px] md:text-[11px]">
+                            {clientSummaries.length === 0 ? (
+                                <tr><td colSpan={4} className="p-20 text-center text-slate-400 italic">Nenhuma pendência na lista.</td></tr>
+                            ) : (
+                                clientSummaries.map(summary => (
+                                    <React.Fragment key={summary.name}>
+                                        <tr 
+                                            onClick={() => setExpandedClient(expandedClient === summary.name ? null : summary.name)}
+                                            className={`cursor-pointer hover:bg-slate-50 transition-colors ${expandedClient === summary.name ? 'bg-blue-50/30' : ''}`}
+                                        >
+                                            <td className="p-4 text-slate-500 font-medium">
+                                                {new Date(summary.oldestDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                            </td>
+                                            <td className="p-4 font-bold text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                                                {summary.name}
+                                                <span className="bg-blue-100 text-blue-600 text-[9px] px-1.5 py-0.5 rounded-full">
+                                                    {summary.totalTopics}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <span className={`px-2 py-1 rounded-full font-bold text-[10px] ${summary.daysOpen > 10 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {summary.daysOpen}d
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <ChevronRightIcon className={`w-5 h-5 text-slate-300 transition-transform inline-block ${expandedClient === summary.name ? 'rotate-90 text-blue-500' : ''}`} />
+                                            </td>
+                                        </tr>
+                                        {expandedClient === summary.name && (
+                                            <tr>
+                                                <td colSpan={4} className="p-0 bg-slate-50/50">
+                                                    <div className="p-4 space-y-3 animate-slideDown">
+                                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+                                                            {summary.issues.map((issue) => (
+                                                                <div key={issue.id} className="divide-y divide-slate-50">
+                                                                    <div className="bg-slate-100/50 px-4 py-2 flex justify-between items-center">
+                                                                        <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                                                            Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                        <div className="flex gap-2">
+                                                                            <button onClick={() => handleEditIssue(issue)} className="text-blue-600 hover:underline text-[10px] font-bold uppercase">Editar</button>
+                                                                            <button onClick={() => deleteIssue(issue.id)} className="text-red-600 hover:underline text-[10px] font-bold uppercase">Excluir</button>
+                                                                        </div>
+                                                                    </div>
+                                                                    {issue.topics.map((topic, idx) => {
+                                                                        const topicDays = calculateDaysFromDate(topic.date || issue.date);
+                                                                        return (
+                                                                            <div key={topic.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                                                                                <div className="flex items-start gap-4 min-w-0">
+                                                                                    <span className="text-slate-400 font-bold text-sm mt-0.5">{idx + 1}.</span>
+                                                                                    <div className="flex flex-col gap-1 min-w-0">
+                                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                                            <input 
+                                                                                                type="checkbox" 
+                                                                                                checked={topic.status === 'Resolved'} 
+                                                                                                onChange={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    toggleTopicStatus(issue.id, topic.id);
+                                                                                                }}
+                                                                                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                                            />
+                                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                                                {new Date((topic.date || issue.date) + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                                                                            </span>
+                                                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${topicDays > 10 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
+                                                                                                {topicDays} dias
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <p className={`text-sm text-slate-700 leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-slate-400' : ''}`}>
+                                                                                            {topic.description}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                                                                    {topic.media.length > 0 && (
+                                                                                        <button 
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setViewingMedia({ list: topic.media, index: 0 });
+                                                                                            }}
+                                                                                            className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                                                                                            title="Ver Fotos"
+                                                                                        >
+                                                                                            <PhotoIcon className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        ) : (
+            <div className="space-y-4">
+                {sortedReminders.length === 0 ? (
+                <div className="py-24 text-center bg-white rounded-3xl border-2 border-dashed border-slate-100">
+                    <CalendarDaysIcon className="w-16 h-16 text-slate-100 mx-auto mb-4" />
+                    <p className="text-slate-400 font-normal text-xs uppercase tracking-[0.2em]">Sua agenda pessoal está vazia</p>
+                </div>
+                ) : (
+                sortedReminders.map(item => {
+                    const daysOpen = calculateDaysOpen(item.createdAt);
+                    const isLate = item.status === 'Pending' && new Date(item.dueDate) < new Date();
+                    
+                    return (
+                    <div key={item.id} className={`group bg-white p-6 rounded-2xl border transition-all duration-300 relative overflow-hidden ${isLate ? 'border-red-200 shadow-red-50' : 'border-slate-100'} ${item.status === 'Done' ? 'opacity-60 grayscale' : 'hover:shadow-md hover:border-blue-100'}`}>
+                        {isLate && <div className="absolute top-0 left-0 w-1.5 h-full bg-red-500 animate-pulse" />}
+                        
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                        <div className="flex-grow min-w-0 font-normal">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                            <h3 className={`font-normal uppercase tracking-tight text-sm sm:text-base ${item.status === 'Done' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                                {item.title}
+                            </h3>
+                            {isLate && <span className="bg-red-500 text-white text-[8px] font-normal px-2 py-0.5 rounded-full uppercase">Urgente</span>}
+                            </div>
+                            <p className="text-xs text-slate-500 font-normal leading-relaxed mb-4">{item.description}</p>
+                            
+                            <div className="flex flex-wrap gap-x-6 gap-y-2">
+                            <div className="flex items-center gap-2 font-normal">
+                                <CalendarDaysIcon className="w-4 h-4 text-blue-400" />
+                                <span className="text-[10px] font-normal text-slate-400 uppercase tracking-wide">
+                                Agendado: <span className="text-blue-600">{new Date(item.dueDate).toLocaleString('pt-BR')}</span>
+                                </span>
+                            </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                            <button 
+                            onClick={() => toggleStatus(item.id)}
+                            className={`p-3 rounded-full transition-all ${item.status === 'Done' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400 hover:text-green-600 hover:bg-green-50 shadow-sm'}`}
+                            >
+                            <CheckCircleIcon className="w-6 h-6" />
+                            </button>
+                            <button 
+                            onClick={() => deleteItem(item.id)}
+                            className="p-3 rounded-full bg-slate-50 text-slate-300 hover:text-red-600"
+                            >
+                            <TrashIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        </div>
+                    </div>
+                    );
+                })
+                )}
+            </div>
+        )}
+      </div>
+
+      {/* Media Viewer Modal */}
+      {viewingMedia && (
+          <Modal onClose={() => setViewingMedia(null)} fullScreen={true}>
+              <div className="w-full h-full flex flex-col items-center justify-center relative touch-none bg-black/95">
+                <div className="flex-grow w-full h-full flex items-center justify-center overflow-hidden">
+                    <img 
+                        src={getDisplayableDriveUrl(viewingMedia.list[viewingMedia.index].url) || undefined} 
+                        className="max-h-full max-w-full object-contain"
+                    />
+                </div>
+                {viewingMedia.list.length > 1 && (
+                    <>
+                        <button className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/10 rounded-full text-white" onClick={() => setViewingMedia(prev => prev ? { ...prev, index: (prev.index - 1 + prev.list.length) % prev.list.length } : null)}><ChevronLeftIcon className="w-8 h-8"/></button>
+                        <button className="absolute right-4 top-1/2 -translate-y-1/2 p-4 bg-white/10 rounded-full text-white" onClick={() => setViewingMedia(prev => prev ? { ...prev, index: (prev.index + 1) % prev.list.length } : null)}><ChevronRightIcon className="w-8 h-8"/></button>
+                    </>
+                )}
+              </div>
+          </Modal>
+      )}
+    </div>
+  );
+};
+
+export default PersonalAgenda;
