@@ -45,16 +45,16 @@ const Modal: React.FC<ModalProps> = ({ onClose, children, fullScreen = false }) 
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4"
+      className="fixed inset-0 bg-black/75 flex justify-center items-center z-50 p-2 sm:p-4 overflow-x-hidden overscroll-none"
       onClick={onClose}
     >
       <div
-        className="bg-white p-5 rounded-lg shadow-2xl relative max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white p-4 sm:p-6 rounded-2xl shadow-2xl relative w-full max-w-4xl max-h-[95vh] overflow-y-auto overscroll-contain overflow-x-hidden"
         onClick={e => e.stopPropagation()}
       >
         <button
           onClick={onClose}
-          className="absolute -top-3 -right-3 bg-slate-700 text-white rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold hover:bg-red-600 transition-colors"
+          className="absolute top-2 right-2 sm:-top-3 sm:-right-3 bg-slate-700 text-white rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold hover:bg-red-600 transition-colors z-10"
           aria-label="Fechar modal"
         >
           &times;

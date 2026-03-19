@@ -783,7 +783,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                   </div>
                   <div className="flex justify-end gap-3 pt-2">
                     <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
-                    <button type="submit" className="px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
+                    <button type="submit" className="px-6 sm:px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
                         {editingIssueId ? 'Atualizar Pendência' : 'Salvar Pendência na Lista'}
                     </button>
                   </div>
@@ -806,7 +806,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
                   <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
-                  <button type="submit" className="px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">Salvar na Agenda</button>
+                  <button type="submit" className="px-6 sm:px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">Salvar na Agenda</button>
                 </div>
               </form>
           )}
