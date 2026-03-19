@@ -293,7 +293,8 @@ export interface FurnitureOrder {
   assemblerName: string;
   items: FurnitureOrderItem[];
   status: 'Pending' | 'Completed';
-  batchId?: string; // NOVO: Agrupamento em códigos de envio
+  generatedOrderId?: string; // ID único para o pedido gerado
+  generatedOrderDate?: string; // Data em que o pedido foi gerado
   createdAt: string;
 }
 

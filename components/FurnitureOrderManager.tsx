@@ -78,14 +78,16 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+    const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+    const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null);
     const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number } | null>(null);
     const [showManifest, setShowManifest] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [activeTab, setActiveTab] = useState<'OPEN' | 'COMPLETED'>('OPEN');
 
     
-    // Batch Selection State
-    const [batchModalOrder, setBatchModalOrder] = useState<FurnitureOrder | null>(null);
+    // Selection State
+    const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
     // Form State
     const [clientName, setClientName] = useState('');
@@ -113,7 +115,7 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
         return orders.filter(o => 
             o.clientName.toLowerCase().includes(term) || 
             o.assemblerName.toLowerCase().includes(term) ||
-            (o.batchId || '').toLowerCase().includes(term)
+            (o.generatedOrderDate || '').toLowerCase().includes(term)
         ).sort((a, b) => {
             if (a.status === b.status) {
                 return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -122,10 +124,14 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
         });
     }, [orders, searchTerm]);
 
-    const activeBatches = useMemo(() => {
-        const codes = new Set<string>();
-        orders.forEach(o => { if(o.batchId) codes.add(o.batchId); });
-        return Array.from(codes).sort();
+    const activeGeneratedOrders = useMemo(() => {
+        const orderGroups = new Map<string, { id: string, date: string }>();
+        orders.forEach(o => { 
+            if(o.generatedOrderId && o.generatedOrderDate) {
+                orderGroups.set(o.generatedOrderId, { id: o.generatedOrderId, date: o.generatedOrderDate });
+            }
+        });
+        return Array.from(orderGroups.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [orders]);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,32 +180,36 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
         setIsCreating(true);
     };
 
-    const toggleOrderBatch = (order: FurnitureOrder, e: React.MouseEvent) => {
+    const toggleOrderSelection = (order: FurnitureOrder, e: React.MouseEvent) => {
         e.stopPropagation();
         if (order.status === 'Completed') {
-            // Remover do lote
-            const updated = orders.map(o => 
-                o.id === order.id ? { ...o, status: 'Pending' as const, batchId: undefined } : o
-            );
-            onUpdateOrders(updated);
+            // Revert to pending
+            if(window.confirm("Deseja remover este registro do pedido gerado? Ele voltará a ficar 'Em Aberto'.")) {
+                const updated = orders.map(o => 
+                    o.id === order.id ? { ...o, status: 'Pending' as const, generatedOrderId: undefined, generatedOrderDate: undefined } : o
+                );
+                onUpdateOrders(updated);
+            }
         } else {
-            // Abrir modal de seleção de lote/geração de código
-            setBatchModalOrder(order);
+            // Toggle selection
+            setSelectedOrderIds(prev => 
+                prev.includes(order.id) ? prev.filter(id => id !== order.id) : [...prev, order.id]
+            );
         }
     };
 
-    const assignToBatch = (code: string) => {
-        if (!batchModalOrder) return;
+    const handleGenerateOrder = () => {
+        if (selectedOrderIds.length === 0) return;
+        
+        const newOrderId = generateUUID();
+        const newOrderDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        
         const updated = orders.map(o => 
-            o.id === batchModalOrder.id ? { ...o, status: 'Completed' as const, batchId: code } : o
+            selectedOrderIds.includes(o.id) ? { ...o, status: 'Completed' as const, generatedOrderId: newOrderId, generatedOrderDate: newOrderDate } : o
         );
         onUpdateOrders(updated);
-        setBatchModalOrder(null);
-    };
-
-    const generateNewBatch = () => {
-        const newCode = `PED-${Math.floor(1000 + Math.random() * 9000)}`;
-        assignToBatch(newCode);
+        setSelectedOrderIds([]);
+        alert("Pedido gerado com sucesso!");
     };
 
     const saveOrder = () => {
@@ -244,9 +254,9 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
         }
     };
 
-    const generateBatchPdf = async (batchId: string) => {
+    const generateOrderPdf = async (orderGroup: { id: string, date: string }) => {
         setIsGeneratingPdf(true);
-        const batchOrders = orders.filter(o => o.batchId === batchId);
+        const batchOrders = orders.filter(o => o.generatedOrderId === orderGroup.id);
         try {
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = 210;
@@ -255,10 +265,12 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
 
             // Header Principal do PDF
             pdf.setFont('helvetica', 'bold').setFontSize(12).setTextColor(40);
-            pdf.text(`SOLICITAÇÃO DE MATERIAIS - COD: ${batchId}`, margin, y);
+            const formattedDate = new Date(orderGroup.date + 'T12:00:00Z').toLocaleDateString('pt-BR');
+            pdf.text(`SOLICITAÇÃO DE MATERIAIS - DATA: ${formattedDate}`, margin, y);
             
             pdf.setFontSize(7).setFont('helvetica', 'normal').setTextColor(120);
             pdf.text(`EMISSÃO: ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, y, { align: 'right' });
+
             
             y += 6;
             pdf.setDrawColor(200).setLineWidth(0.1).line(margin, y, pageWidth - margin, y);
@@ -317,7 +329,7 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                 pdf.text(`Página ${i} de ${pageCount} - Gerado via Tracker System`, pageWidth / 2, 290, { align: 'center' });
             }
 
-            pdf.save(`pedido_envio_${batchId}.pdf`);
+            pdf.save(`pedido_materiais_${orderGroup.date}.pdf`);
         } catch (e) {
             alert("Erro ao gerar PDF.");
         } finally {
@@ -334,12 +346,12 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-slate-900 text-white text-[10px] uppercase tracking-widest font-normal">
-                            <th className="p-3 w-12 text-center">Status</th>
-                            <th className="p-3 w-32">Data</th>
+                            <th className="p-3 w-12 text-center">Sel.</th>
+                            <th className="p-3 w-32">Data Reg.</th>
                             <th className="p-3 w-20 text-center">Dias</th>
                             <th className="p-3">Cliente</th>
                             <th className="p-3">Montador</th>
-                            <th className="p-3 w-28 text-center">Código Envio</th>
+                            <th className="p-3 w-32 text-center">Data Pedido</th>
                             <th className="p-3 w-24 text-right">Ações</th>
                         </tr>
                     </thead>
@@ -350,15 +362,16 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                             ordersList.map(order => {
                                 const daysOpen = calculateDaysElapsed(order.createdAt);
                                 const isDone = order.status === 'Completed';
+                                const isSelected = selectedOrderIds.includes(order.id);
                                 return (
                                     <React.Fragment key={order.id}>
                                         <tr 
                                             onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
                                             className={`cursor-pointer transition-colors text-[14px] md:text-[10px] font-normal ${isDone ? 'bg-green-50/30' : 'hover:bg-slate-50'}`}
                                         >
-                                            <td className="p-3 text-center" onClick={(e) => toggleOrderBatch(order, e)}>
-                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all mx-auto ${isDone ? 'bg-green-500 border-green-500' : 'border-slate-300 bg-white'}`}>
-                                                    {isDone && <CheckCircleIcon className="w-4 h-4 text-white" />}
+                                            <td className="p-3 text-center" onClick={(e) => toggleOrderSelection(order, e)}>
+                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all mx-auto ${isSelected || isDone ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300 bg-white'}`}>
+                                                    {(isSelected || isDone) && <CheckCircleIcon className="w-4 h-4 text-white" />}
                                                 </div>
                                             </td>
                                             <td className="p-3 text-slate-500">{new Date(order.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}</td>
@@ -370,8 +383,10 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                                             <td className={`p-3 uppercase text-slate-800 tracking-tight font-medium`}>{order.clientName}</td>
                                             <td className="p-3 uppercase text-slate-600">{order.assemblerName}</td>
                                             <td className="p-3 text-center">
-                                                {order.batchId ? (
-                                                    <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md font-black border border-indigo-100">{order.batchId}</span>
+                                                {order.generatedOrderDate ? (
+                                                    <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md font-black border border-indigo-100">
+                                                        {new Date(order.generatedOrderDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                                    </span>
                                                 ) : (
                                                     <span className="text-slate-300 italic">---</span>
                                                 )}
@@ -387,6 +402,7 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                                                             <PencilIcon className="w-4 h-4"/>
                                                         </button>
                                                     )}
+
                                                     <button 
                                                         onClick={(e) => removeOrder(order.id, e)} 
                                                         className="text-slate-400 hover:text-red-500"
@@ -442,6 +458,163 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
         </div>
     );
 
+    const renderCompletedTable = () => {
+        if (activeGeneratedOrders.length === 0) {
+            return (
+                <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-900 text-white text-[10px] uppercase tracking-widest font-normal">
+                                <th className="p-3 w-12 text-center"></th>
+                                <th className="p-3">Data do Pedido</th>
+                                <th className="p-3 text-center">Qtd Clientes</th>
+                                <th className="p-3 text-center">Qtd Montadores</th>
+                                <th className="p-3 w-24 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colSpan={5} className="p-10 text-center text-slate-400 italic">Nenhum pedido concluído.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            );
+        }
+
+        return (
+            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-900 text-white text-[10px] uppercase tracking-widest font-normal">
+                                <th className="p-3 w-12 text-center"></th>
+                                <th className="p-3">Data do Pedido</th>
+                                <th className="p-3 text-center">Qtd Clientes</th>
+                                <th className="p-3 text-center">Qtd Montadores</th>
+                                <th className="p-3 w-24 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {activeGeneratedOrders.map(batch => {
+                                const batchOrders = orders.filter(o => o.generatedOrderId === batch.id);
+                                const uniqueClients = new Set(batchOrders.map(o => o.clientName)).size;
+                                const uniqueAssemblers = new Set(batchOrders.map(o => o.assemblerName)).size;
+                                const isExpanded = expandedBatchId === batch.id;
+
+                                return (
+                                    <React.Fragment key={batch.id}>
+                                        <tr 
+                                            onClick={() => setExpandedBatchId(isExpanded ? null : batch.id)}
+                                            className={`cursor-pointer transition-colors text-[14px] md:text-[10px] font-normal hover:bg-slate-50 ${isExpanded ? 'bg-slate-50' : ''}`}
+                                        >
+                                            <td className="p-3 text-center">
+                                                <ChevronRightIcon className={`w-4 h-4 mx-auto transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                            </td>
+                                            <td className="p-3 font-bold text-slate-700">
+                                                {new Date(batch.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                            </td>
+                                            <td className="p-3 text-center text-slate-600">{uniqueClients}</td>
+                                            <td className="p-3 text-center text-slate-600">{uniqueAssemblers}</td>
+                                            <td className="p-3 text-right">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); generateOrderPdf(batch); }}
+                                                    className="text-slate-400 hover:text-indigo-600"
+                                                    title="Imprimir Pedido"
+                                                >
+                                                    <PrinterIcon className="w-5 h-5 inline" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {isExpanded && (
+                                            <tr className="bg-slate-50/50">
+                                                <td colSpan={5} className="p-0 border-b">
+                                                    <div className="p-4 bg-white m-2 rounded-lg border border-slate-200 shadow-inner animate-fadeIn">
+                                                        <h4 className="text-[9px] font-bold text-slate-400 uppercase mb-3 tracking-widest flex items-center gap-2">
+                                                            <ClipboardListIcon className="w-3 h-3"/> Registros do Pedido
+                                                        </h4>
+                                                        <table className="w-full text-left text-[14px] md:text-[10px]">
+                                                            <thead className="border-b">
+                                                                <tr className="text-slate-400 font-bold uppercase">
+                                                                    <th className="pb-2 w-12 text-center">Sel.</th>
+                                                                    <th className="pb-2">Cliente</th>
+                                                                    <th className="pb-2">Montador</th>
+                                                                    <th className="pb-2 w-20 text-center">Itens</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y">
+                                                                {batchOrders.map(record => {
+                                                                    const isRecordExpanded = expandedRecordId === record.id;
+                                                                    return (
+                                                                        <React.Fragment key={record.id}>
+                                                                            <tr 
+                                                                                onClick={() => setExpandedRecordId(isRecordExpanded ? null : record.id)}
+                                                                                className={`cursor-pointer hover:bg-slate-50 transition-colors ${isRecordExpanded ? 'bg-slate-50' : ''}`}
+                                                                            >
+                                                                                <td className="py-2 text-center" onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    const updated = orders.map(o => 
+                                                                                        o.id === record.id ? { ...o, status: 'Pending' as const, generatedOrderId: undefined, generatedOrderDate: undefined } : o
+                                                                                    );
+                                                                                    onUpdateOrders(updated);
+                                                                                }}>
+                                                                                    <div className="w-4 h-4 rounded border flex items-center justify-center transition-all mx-auto bg-indigo-500 border-indigo-500">
+                                                                                        <CheckCircleIcon className="w-3 h-3 text-white" />
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="py-2 uppercase text-slate-700 font-medium">{record.clientName}</td>
+                                                                                <td className="py-2 uppercase text-slate-600">{record.assemblerName}</td>
+                                                                                <td className="py-2 text-center text-slate-500 font-bold">{record.items.length}</td>
+                                                                            </tr>
+                                                                            {isRecordExpanded && (
+                                                                                <tr className="bg-slate-50">
+                                                                                    <td colSpan={4} className="p-0">
+                                                                                        <div className="p-3 m-2 bg-white rounded border shadow-sm">
+                                                                                            <table className="w-full text-left text-[9px]">
+                                                                                                <thead className="border-b">
+                                                                                                    <tr className="text-slate-400 font-bold uppercase">
+                                                                                                        <th className="pb-1 w-10 text-right pr-2">Qtd</th>
+                                                                                                        <th className="pb-1 w-8">Un</th>
+                                                                                                        <th className="pb-1">Descrição</th>
+                                                                                                        <th className="pb-1 w-10 text-center">Foto</th>
+                                                                                                    </tr>
+                                                                                                </thead>
+                                                                                                <tbody className="divide-y">
+                                                                                                    {record.items.map(item => (
+                                                                                                        <tr key={item.id}>
+                                                                                                            <td className="py-1 font-black text-right pr-2 text-blue-600">{item.quantity}</td>
+                                                                                                            <td className="py-1 text-slate-400 font-bold uppercase">{item.unit}</td>
+                                                                                                            <td className="py-1 uppercase text-slate-700">{item.description}</td>
+                                                                                                            <td className="py-1 text-center">
+                                                                                                                {item.media ? (
+                                                                                                                    <button onClick={(e) => { e.stopPropagation(); setViewingMedia({ list: [item.media!], index: 0 }); }} className="text-blue-600"><CameraIcon className="w-3 h-3 mx-auto"/></button>
+                                                                                                                ) : <span className="text-slate-300">---</span>}
+                                                                                                            </td>
+                                                                                                        </tr>
+                                                                                                    ))}
+                                                                                                </tbody>
+                                                                                            </table>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            )}
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border">
@@ -457,7 +630,7 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                         onClick={() => setShowManifest(true)}
                         className="flex-1 md:flex-none bg-slate-800 text-white px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-black transition-all"
                     >
-                        <ClipboardListIcon className="w-5 h-5"/> Pedidos Gerados ({activeBatches.length})
+                        <ClipboardListIcon className="w-5 h-5"/> Pedidos Gerados ({activeGeneratedOrders.length})
                     </button>
                     <button 
                         onClick={() => setIsCreating(true)}
@@ -496,54 +669,32 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
 
             {/* Orders Table */}
             <div className="space-y-3">
+                {selectedOrderIds.length > 0 && (
+                    <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-indigo-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
+                                {selectedOrderIds.length}
+                            </div>
+                            <span className="text-indigo-900 font-medium text-sm">
+                                {selectedOrderIds.length === 1 ? 'registro selecionado' : 'registros selecionados'}
+                            </span>
+                        </div>
+                        <button 
+                            onClick={handleGenerateOrder}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2"
+                        >
+                            <CheckCircleIcon className="w-4 h-4" />
+                            Gerar Pedido
+                        </button>
+                    </div>
+                )}
+
                 {activeTab === 'OPEN' ? (
                     renderOrderTable(openOrders, "Nenhum pedido em aberto.")
                 ) : (
-                    renderOrderTable(completedOrders, "Nenhum pedido concluído.")
+                    renderCompletedTable()
                 )}
             </div>
-
-            {/* Batch Selection Modal */}
-            {batchModalOrder && (
-                <Modal onClose={() => setBatchModalOrder(null)}>
-                    <div className="p-4 space-y-4">
-                        <div className="flex justify-between items-center border-b pb-3">
-                            <h3 className="text-lg font-bold text-slate-800 uppercase tracking-tighter">Agrupar para Envio</h3>
-                            <button onClick={() => setBatchModalOrder(null)}><XIcon className="w-6 h-6 text-slate-400"/></button>
-                        </div>
-                        <p className="text-sm text-slate-600">Escolha um código de envio existente ou gere um novo para este registro:</p>
-                        
-                        <div className="space-y-3">
-                            {activeBatches.length > 0 && (
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Códigos Ativos</label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        {activeBatches.map(code => (
-                                            <button 
-                                                key={code} 
-                                                onClick={() => assignToBatch(code)}
-                                                className="p-3 border rounded-xl hover:bg-indigo-50 hover:border-indigo-300 transition-all text-left flex flex-col"
-                                            >
-                                                <span className="font-black text-indigo-700 text-sm">{code}</span>
-                                                <span className="text-[9px] text-slate-400 font-bold uppercase">Incluir neste</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            
-                            <div className="pt-2 border-t">
-                                <button 
-                                    onClick={generateNewBatch}
-                                    className="w-full bg-blue-600 text-white p-4 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
-                                >
-                                    <PlusCircleIcon className="w-6 h-6" /> Gerar Novo Código de Envio
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </Modal>
-            )}
 
             {/* Create/Edit Modal */}
             {isCreating && (
@@ -656,35 +807,36 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                         <div className="flex justify-between items-center border-b pb-3">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-                                    <ClipboardListIcon className="w-6 h-6 text-blue-600" />
-                                    Pedidos Gerados para Envio
+                                    <ClipboardListIcon className="w-6 h-6 text-indigo-600" />
+                                    Pedidos Gerados
                                 </h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{activeBatches.length} Lotes Disponíveis</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{activeGeneratedOrders.length} Pedidos Disponíveis</p>
                             </div>
                             <button onClick={() => setShowManifest(false)}><XIcon className="w-6 h-6 text-slate-400"/></button>
                         </div>
 
                         <div className="flex-grow overflow-y-auto space-y-6">
-                            {activeBatches.length === 0 ? (
+                            {activeGeneratedOrders.length === 0 ? (
                                 <div className="text-center py-20 bg-slate-50 rounded-xl border-2 border-dashed">
                                     <ShoppingCartIcon className="w-12 h-12 text-slate-200 mx-auto mb-2"/>
-                                    <p className="text-slate-400 font-bold uppercase text-[10px]">Nenhum código gerado ainda.</p>
+                                    <p className="text-slate-400 font-bold uppercase text-[10px]">Nenhum pedido gerado ainda.</p>
                                 </div>
                             ) : (
-                                activeBatches.map(batchId => {
-                                    const batchOrders = orders.filter(o => o.batchId === batchId);
+                                activeGeneratedOrders.map(orderGroup => {
+                                    const batchOrders = orders.filter(o => o.generatedOrderId === orderGroup.id);
+                                    const formattedDate = new Date(orderGroup.date + 'T12:00:00Z').toLocaleDateString('pt-BR');
                                     return (
-                                        <div key={batchId} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                        <div key={orderGroup.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                             <div className="bg-slate-900 px-4 py-2 border-b flex justify-between items-center text-white">
                                                 <div>
                                                     <h4 className="font-black uppercase text-sm leading-tight flex items-center gap-2">
-                                                        <TagIcon className="w-4 h-4 text-blue-400" />
-                                                        CÓDIGO: {batchId}
+                                                        <TagIcon className="w-4 h-4 text-indigo-400" />
+                                                        DATA DO PEDIDO: {formattedDate}
                                                     </h4>
                                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{batchOrders.length} Registros Agrupados</p>
                                                 </div>
                                                 <button 
-                                                    onClick={() => generateBatchPdf(batchId)}
+                                                    onClick={() => generateOrderPdf(orderGroup)}
                                                     className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors"
                                                 >
                                                     <PrinterIcon className="w-4 h-4" />
@@ -706,7 +858,7 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                                                         <div className="space-y-1">
                                                             {order.items.map(it => (
                                                                 <div key={it.id} className="grid grid-cols-[30px_35px_1fr] gap-2 items-start text-[9px] text-slate-600 uppercase">
-                                                                    <div className="text-right pr-2 font-black text-blue-700">{it.quantity}</div>
+                                                                    <div className="text-right pr-2 font-black text-indigo-700">{it.quantity}</div>
                                                                     <div className="font-bold text-slate-400 text-[8px]">{it.unit}</div>
                                                                     <div className="font-medium text-slate-800 truncate">{it.description}</div>
                                                                 </div>
@@ -725,13 +877,13 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                             <button 
                                 onClick={() => {
                                     if(window.confirm("Limpar todos os agrupamentos? Todos os pedidos voltarão a ser 'Pendentes'.")) {
-                                        onUpdateOrders(orders.map(o => ({ ...o, status: 'Pending', batchId: undefined })));
+                                        onUpdateOrders(orders.map(o => ({ ...o, status: 'Pending', generatedOrderId: undefined, generatedOrderDate: undefined })));
                                         setShowManifest(false);
                                     }
                                 }} 
                                 className="text-red-400 hover:text-red-600 text-[10px] font-bold uppercase"
                             >
-                                Resetar Códigos
+                                Resetar Pedidos
                             </button>
                             <button 
                                 onClick={() => setShowManifest(false)}
