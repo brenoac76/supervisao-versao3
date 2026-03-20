@@ -536,6 +536,7 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                                                                 <tr className="text-slate-400 font-bold uppercase">
                                                                     <th className="pb-2 w-12 text-center">Sel.</th>
                                                                     <th className="pb-2">Cliente</th>
+                                                                    <th className="pb-2 w-24">Data Reg.</th>
                                                                     <th className="pb-2">Montador</th>
                                                                     <th className="pb-2 w-20 text-center">Itens</th>
                                                                 </tr>
@@ -561,12 +562,13 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                                                                                     </div>
                                                                                 </td>
                                                                                 <td className="py-2 uppercase text-slate-700 font-medium">{record.clientName}</td>
+                                                                                <td className="py-2 text-slate-500">{new Date(record.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}</td>
                                                                                 <td className="py-2 uppercase text-slate-600">{record.assemblerName}</td>
                                                                                 <td className="py-2 text-center text-slate-500 font-bold">{record.items.length}</td>
                                                                             </tr>
                                                                             {isRecordExpanded && (
                                                                                 <tr className="bg-slate-50">
-                                                                                    <td colSpan={4} className="p-0">
+                                                                                    <td colSpan={5} className="p-0">
                                                                                         <div className="p-3 m-2 bg-white rounded border shadow-sm">
                                                                                             <table className="w-full text-left text-[9px]">
                                                                                                 <thead className="border-b">
