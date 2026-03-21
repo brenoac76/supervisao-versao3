@@ -417,18 +417,58 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 `${topicDays}d`,
                 idx === 0 ? issue.clientName : '',
                 topic.description,
-                topic.status === 'Pending' ? 'Pendente' : 'Resolvido'
+                topic.status === 'Pending' ? 'Pendente' : 'Resolvido',
+                topic.status // Hidden column for styling
             ]);
         });
     });
 
     autoTable(doc, {
         head: [tableColumn],
-        body: tableRows,
+        body: tableRows.map(row => row.slice(0, 5)),
         startY: 40,
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [30, 41, 59] }, // slate-800
         alternateRowStyles: { fillColor: [241, 245, 249] }, // slate-100
+        didDrawCell: (data) => {
+            if (data.row.section !== 'body') return;
+            const rowIndex = data.row.index;
+            const isResolved = tableRows[rowIndex][5] === 'Resolved';
+            
+            if (isResolved) {
+                const { x, y, width, height } = data.cell;
+                doc.setDrawColor(34, 197, 94);
+                doc.setLineWidth(0.1);
+                
+                // Strike through each line of text in the cell
+                const textLines = data.cell.text as string[];
+                if (textLines && textLines.length > 0) {
+                    const cellPadding = data.cell.styles.cellPadding as any;
+                    const padding = typeof cellPadding === 'number' ? cellPadding : (cellPadding.top || 0);
+                    const fontSize = data.cell.styles.fontSize;
+                    // Distribution of lines within the cell height
+                    const totalTextHeight = height - (padding * 2);
+                    const lineSpacing = totalTextHeight / textLines.length;
+                    
+                    for (let i = 0; i < textLines.length; i++) {
+                        // Adjust lineY to be centered on the text line
+                        // fontSize is in points, convert to mm (approx / 2.83)
+                        // Then take roughly half of that height for the middle
+                        const textHeightMm = fontSize / 2.83;
+                        const lineY = y + padding + (i * lineSpacing) + (textHeightMm / 2);
+                        doc.line(x + 2, lineY, x + width - 2, lineY);
+                    }
+                }
+            }
+        },
+        willDrawCell: (data) => {
+            if (data.row.section !== 'body') return;
+            const rowIndex = data.row.index;
+            const isResolved = tableRows[rowIndex][5] === 'Resolved';
+            if (isResolved) {
+                doc.setTextColor(34, 197, 94);
+            }
+        }
     });
 
     doc.save(`relatorio_pendencias_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -528,14 +568,36 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               const padding = 5;
               
               // Description
+              const isResolved = topic.status === 'Resolved';
               doc.setFont("helvetica", "bold");
               doc.setFontSize(11);
-              doc.setTextColor(0, 0, 0);
+              
+              if (isResolved) {
+                  doc.setTextColor(34, 197, 94); // text-green-500
+              } else {
+                  doc.setTextColor(0, 0, 0);
+              }
+
               const splitDescription = doc.splitTextToSize(topic.description, pageWidth - 2 * margin - (padding * 2));
               
               // Start description below the top margin to leave space for the badge
               const descY = y + padding + 8; 
               doc.text(splitDescription, margin + padding, descY);
+
+              if (isResolved) {
+                  doc.setDrawColor(34, 197, 94);
+                  doc.setLineWidth(0.2);
+                  const actualLineHeight = doc.getLineHeight();
+                  const textHeightMm = doc.getFontSize() / 2.83;
+                  const strikeOffset = textHeightMm / 2;
+                  
+                  for (let i = 0; i < splitDescription.length; i++) {
+                      const textWidth = doc.getTextWidth(splitDescription[i]);
+                      const lineY = descY + (i * actualLineHeight) - strikeOffset;
+                      doc.line(margin + padding, lineY, margin + padding + textWidth, lineY);
+                  }
+              }
+
               y = descY + (splitDescription.length * 5) + 2;
 
               // Add Photos
@@ -569,6 +631,23 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                           doc.addImage(b64, 'JPEG', x, y, imgSize, imgSize, undefined, 'FAST');
                           doc.setDrawColor(220);
                           doc.rect(x, y, imgSize, imgSize);
+
+                          if (isResolved) {
+                              // Diagonal "CONCLUÍDO" stamp across the photo
+                              doc.setTextColor(34, 197, 94); // text-green-500
+                              doc.setFontSize(22);
+                              doc.setFont("helvetica", "bold");
+                              
+                              const centerX = x + (imgSize / 2);
+                              const centerY = y + (imgSize / 2);
+                              
+                              // Rotate text 45 degrees (bottom-left to top-right)
+                              doc.text("CONCLUÍDO", centerX, centerY, { 
+                                  align: 'center', 
+                                  angle: 45
+                              });
+                          }
+
                           x += imgSize + gap;
                       } catch (e) {
                           console.error("Error adding image to PDF:", e);
@@ -634,7 +713,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               onClick={() => setFilter('DONE')}
               className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
             >
-              Histórico
+              Concluídos
             </button>
           </div>
           <button 
@@ -773,7 +852,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
                             <button 
                                 type="button" 
-                                onClick={() => setFormTopics([...formTopics, { id: generateUUID(), description: '', media: [], status: 'Pending', date: issueDate }])}
+                                onClick={() => setFormTopics([...formTopics, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }])}
                                 className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold uppercase text-[10px] hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
                             >
                                 <PlusCircleIcon className="w-4 h-4" /> Adicionar Tópico
@@ -896,7 +975,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                                                 {topicDays} dias
                                                                                             </span>
                                                                                         </div>
-                                                                                        <p className={`text-sm text-slate-700 leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-slate-400' : ''}`}>
+                                                                                        <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : 'text-slate-700'}`}>
                                                                                             {topic.description}
                                                                                         </p>
                                                                                     </div>
@@ -951,9 +1030,9 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                         <div className="flex-grow min-w-0 font-normal">
                             <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <h3 className={`font-normal uppercase tracking-tight text-sm sm:text-base ${item.status === 'Done' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
-                                {item.title}
-                            </h3>
+                            <h3 className={`font-normal uppercase tracking-tight text-sm sm:text-base ${item.status === 'Done' ? 'line-through text-green-600' : 'text-slate-800'}`}>
+                                                                {item.title}
+                                                            </h3>
                             {isLate && <span className="bg-red-500 text-white text-[8px] font-normal px-2 py-0.5 rounded-full uppercase">Urgente</span>}
                             </div>
                             <p className="text-xs text-slate-500 font-normal leading-relaxed mb-4">{item.description}</p>
