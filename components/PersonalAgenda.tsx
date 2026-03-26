@@ -77,7 +77,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 
 const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIssues = [], onUpdateAgenda, onUpdateAgendaIssues, viewMode = 'REMINDERS' }) => {
   const [isAdding, setIsAdding] = useState(false);
-  const [filter, setFilter] = useState<'PENDING' | 'DONE'>('PENDING');
+  const [filter, setFilter] = useState<'PENDING' | 'DONE' | 'ASTECA'>('PENDING');
   const [isGenerating, setIsGenerating] = useState(false);
   
   // PDF Report Filters
@@ -112,13 +112,22 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
   const sortedReminders = useMemo(() => {
     return [...agenda]
-      .filter(item => filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Done')
+      .filter(item => {
+        if (filter === 'ASTECA') return false; // ASTECA is for LIST view
+        return filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Done';
+      })
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [agenda, filter]);
 
   const sortedIssues = useMemo(() => {
     return [...agendaIssues]
-      .filter(item => filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Resolved')
+      .filter(item => {
+        if (filter === 'ASTECA') {
+          // Check if any topic in this issue is an open ASTECA
+          return item.topics?.some(t => t.isAsteca && t.status === 'Pending');
+        }
+        return filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Resolved';
+      })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [agendaIssues, filter]);
 
@@ -165,10 +174,13 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
     });
 
     return Object.entries(groups).map(([name, issues]) => {
-      // Filter topics based on the main filter (PENDING/DONE)
+      // Filter topics based on the main filter (PENDING/DONE/ASTECA)
       const filteredIssues = issues.map(issue => ({
         ...issue,
-        topics: issue.topics.filter(t => filter === 'PENDING' ? t.status === 'Pending' : t.status === 'Resolved')
+        topics: issue.topics.filter(t => {
+          if (filter === 'ASTECA') return t.isAsteca && t.status === 'Pending';
+          return filter === 'PENDING' ? t.status === 'Pending' : t.status === 'Resolved';
+        })
       })).filter(issue => issue.topics.length > 0);
       
       if (filteredIssues.length === 0) return null;
@@ -771,6 +783,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
             >
               Pendentes
+            </button>
+            <button 
+              onClick={() => setFilter('ASTECA')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              ASTECAS
             </button>
             <button 
               onClick={() => setFilter('DONE')}
