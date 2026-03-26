@@ -95,8 +95,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
   const [issueClient, setIssueClient] = useState('');
   const [issueDate, setIssueDate] = useState(getLocalYYYYMMDD());
-  const [formTopics, setFormTopics] = useState<{ id: string; description: string; media: Media[]; status: 'Pending' | 'Resolved'; date: string }[]>([
-    { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }
+  const [formTopics, setFormTopics] = useState<{ id: string; description: string; media: Media[]; status: 'Pending' | 'Resolved'; date: string; isAsteca?: boolean }[]>([
+    { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }
   ]);
   const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,7 +239,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
     setIssueClient('');
     setIssueDate(getLocalYYYYMMDD());
-    setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }]);
+    setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }]);
     setIsAdding(false);
   };
 
@@ -250,13 +250,14 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       
       // Robust normalization for editing
       const topics = issue.topics && issue.topics.length > 0 
-        ? issue.topics.map(t => ({ ...t, date: t.date || issue.date })) 
+        ? issue.topics.map(t => ({ ...t, date: t.date || issue.date, isAsteca: !!t.isAsteca })) 
         : [{ 
             id: issue.id, 
             description: (issue as any).description || '', 
             media: (issue as any).media || [], 
             status: (issue as any).status || 'Pending', 
-            date: issue.date 
+            date: issue.date,
+            isAsteca: false
           }];
           
       setFormTopics(topics);
@@ -406,21 +407,40 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
     doc.text(filterText, 14, 34);
 
+    // Flatten and Sort: ASTECA first, then date desc
+    const flatTopics: any[] = [];
+    filteredIssues.forEach(issue => {
+        issue.topics.forEach(topic => {
+            flatTopics.push({
+                ...topic,
+                clientName: issue.clientName
+            });
+        });
+    });
+
+    flatTopics.sort((a, b) => {
+        if (a.isAsteca && !b.isAsteca) return -1;
+        if (!a.isAsteca && b.isAsteca) return 1;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+    const totalAsteca = flatTopics.filter(t => t.isAsteca).length;
+    const totalGeneral = flatTopics.length;
+
     const tableColumn = ["Data", "Dias", "Cliente", "Descrição", "Status"];
     const tableRows: any[] = [];
     
-    filteredIssues.forEach(issue => {
-        issue.topics.forEach((topic, idx) => {
-            const topicDays = calculateDaysFromDate(topic.date);
-            tableRows.push([
-                new Date(topic.date + 'T12:00:00Z').toLocaleDateString('pt-BR'),
-                `${topicDays}d`,
-                idx === 0 ? issue.clientName : '',
-                topic.description,
-                topic.status === 'Pending' ? 'Pendente' : 'Resolvido',
-                topic.status // Hidden column for styling
-            ]);
-        });
+    flatTopics.forEach(topic => {
+        const topicDays = calculateDaysFromDate(topic.date);
+        tableRows.push([
+            new Date(topic.date + 'T12:00:00Z').toLocaleDateString('pt-BR'),
+            `${topicDays}d`,
+            topic.clientName,
+            topic.isAsteca ? `[ASTECA] ${topic.description}` : topic.description,
+            topic.status === 'Pending' ? 'Pendente' : 'Resolvido',
+            topic.status, // Hidden column for styling
+            topic.isAsteca // Hidden column for styling
+        ]);
     });
 
     autoTable(doc, {
@@ -465,11 +485,23 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             if (data.row.section !== 'body') return;
             const rowIndex = data.row.index;
             const isResolved = tableRows[rowIndex][5] === 'Resolved';
+            const isAsteca = tableRows[rowIndex][6];
             if (isResolved) {
                 doc.setTextColor(34, 197, 94);
+            } else if (isAsteca) {
+                doc.setTextColor(220, 38, 38); // red-600
             }
         }
     });
+
+    // Summary at the end
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38);
+    doc.text(`Total de ASTECAS: ${totalAsteca}`, 14, finalY);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total Geral de Pendências: ${totalGeneral}`, 14, finalY + 6);
 
     doc.save(`relatorio_pendencias_${new Date().toISOString().split('T')[0]}.pdf`);
   };
@@ -513,9 +545,25 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       if (endDate) filteredIssues = filteredIssues.filter(i => i.date <= endDate);
       if (reportClient) filteredIssues = filteredIssues.filter(i => i.clientName === reportClient);
       
-      filteredIssues.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Flatten and Sort: ASTECA first, then date desc
+      const flatTopics: any[] = [];
+      filteredIssues.forEach(issue => {
+          issue.topics.forEach(topic => {
+              flatTopics.push({
+                  ...topic,
+                  clientName: issue.clientName
+              });
+          });
+      });
 
-      const totalTopicsCount = filteredIssues.reduce((acc, issue) => acc + issue.topics.length, 0);
+      flatTopics.sort((a, b) => {
+          if (a.isAsteca && !b.isAsteca) return -1;
+          if (!a.isAsteca && b.isAsteca) return 1;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+
+      const totalAsteca = flatTopics.filter(t => t.isAsteca).length;
+      const totalGeneral = flatTopics.length;
 
       // Header Background (Light)
       doc.setFillColor(241, 245, 249); // Slate-100
@@ -548,138 +596,153 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           filterText += `Período: ${startStr} até ${endStr} | `;
       }
       filterText += `Status: ${reportStatus === 'ALL' ? 'Todos' : (reportStatus === 'PENDING' ? 'Pendentes' : 'Resolvidos')}`;
-      filterText += ` | Total de Pendências: ${totalTopicsCount}`;
+      filterText += ` | Total de Pendências: ${totalGeneral} | Total ASTECAS: ${totalAsteca}`;
       doc.text(filterText, margin, y);
       
       y += 10;
       doc.setTextColor(0, 0, 0); // Reset text color
 
       let currentTopicIndex = 0;
-      for (const issue of filteredIssues) {
-          for (const topic of issue.topics) {
-              currentTopicIndex++;
-              // Check for page break (estimated minimum height for a block)
-              if (y > pageHeight - 100) {
-                  doc.addPage();
-                  y = 20;
-              }
-
-              const startY = y;
-              const padding = 5;
-              
-              // Description
-              const isResolved = topic.status === 'Resolved';
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(11);
-              
-              if (isResolved) {
-                  doc.setTextColor(34, 197, 94); // text-green-500
-              } else {
-                  doc.setTextColor(0, 0, 0);
-              }
-
-              const splitDescription = doc.splitTextToSize(topic.description, pageWidth - 2 * margin - (padding * 2));
-              
-              // Start description below the top margin to leave space for the badge
-              const descY = y + padding + 8; 
-              doc.text(splitDescription, margin + padding, descY);
-
-              if (isResolved) {
-                  doc.setDrawColor(34, 197, 94);
-                  doc.setLineWidth(0.2);
-                  const actualLineHeight = doc.getLineHeight();
-                  const textHeightMm = doc.getFontSize() / 2.83;
-                  const strikeOffset = textHeightMm / 2;
-                  
-                  for (let i = 0; i < splitDescription.length; i++) {
-                      const textWidth = doc.getTextWidth(splitDescription[i]);
-                      const lineY = descY + (i * actualLineHeight) - strikeOffset;
-                      doc.line(margin + padding, lineY, margin + padding + textWidth, lineY);
-                  }
-              }
-
-              y = descY + (splitDescription.length * 5) + 2;
-
-              // Add Photos
-              if (topic.media && topic.media.length > 0) {
-                  const imgSize = 70;
-                  const gap = 5;
-                  let x = margin + padding;
-
-                  for (const media of topic.media) {
-                      if (x + imgSize > pageWidth - margin - padding) {
-                          x = margin + padding;
-                          y += imgSize + gap;
-                      }
-
-                      if (y + imgSize > pageHeight - margin) {
-                          // If we need a new page for photos, we close the current box and start a new one on the next page
-                          doc.setDrawColor(200);
-                          doc.rect(margin, startY, pageWidth - 2 * margin, y - startY + 2);
-                          
-                          doc.addPage();
-                          y = 20;
-                          x = margin + padding;
-                          // Note: This is a simplified approach, ideally the box would continue
-                      }
-
-                      try {
-                          const url = getDisplayableDriveUrl(media.url);
-                          const resp = await fetch(url);
-                          const blob = await resp.blob();
-                          const b64 = await blobToBase64(blob);
-                          doc.addImage(b64, 'JPEG', x, y, imgSize, imgSize, undefined, 'FAST');
-                          doc.setDrawColor(220);
-                          doc.rect(x, y, imgSize, imgSize);
-
-                          if (isResolved) {
-                              // Diagonal "CONCLUÍDO" stamp across the photo
-                              doc.setTextColor(34, 197, 94); // text-green-500
-                              doc.setFontSize(22);
-                              doc.setFont("helvetica", "bold");
-                              
-                              const centerX = x + (imgSize / 2);
-                              const centerY = y + (imgSize / 2);
-                              
-                              // Rotate text 45 degrees (bottom-left to top-right)
-                              doc.text("CONCLUÍDO", centerX, centerY, { 
-                                  align: 'center', 
-                                  angle: 45
-                              });
-                          }
-
-                          x += imgSize + gap;
-                      } catch (e) {
-                          console.error("Error adding image to PDF:", e);
-                      }
-                  }
-                  y += imgSize + padding + 5;
-              } else {
-                  y += padding + 5;
-              }
-              
-              // Draw the box around the entire topic (description + photos)
-              doc.setDrawColor(180);
-              doc.setLineWidth(0.2);
-              doc.rect(margin, startY, pageWidth - 2 * margin, y - startY);
-
-              // Counter Badge (X de Y) - Professional Badge attached to the top line
-              const counterText = `${currentTopicIndex} de ${totalTopicsCount}`;
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(7);
-              const counterWidth = doc.getTextWidth(counterText) + 6;
-              const badgeX = pageWidth - margin - counterWidth - 5;
-              const badgeY = startY - 2.5; // Overlapping the top line
-              
-              doc.setFillColor(30, 41, 59); // Slate-800
-              doc.roundedRect(badgeX, badgeY, counterWidth, 5, 1, 1, 'F');
-              
-              doc.setTextColor(255, 255, 255);
-              doc.text(counterText, badgeX + 3, badgeY + 3.5);
-              
-              y += 10; // Space between boxes
+      for (const topic of flatTopics) {
+          currentTopicIndex++;
+          // Check for page break (estimated minimum height for a block)
+          if (y > pageHeight - 100) {
+              doc.addPage();
+              y = 20;
           }
+
+          const startY = y;
+          const padding = 5;
+          
+          // Description
+          const isResolved = topic.status === 'Resolved';
+          const isAsteca = topic.isAsteca;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
+          
+          if (isResolved) {
+              doc.setTextColor(34, 197, 94); // text-green-500
+          } else if (isAsteca) {
+              doc.setTextColor(220, 38, 38); // text-red-600
+          } else {
+              doc.setTextColor(0, 0, 0);
+          }
+
+          const descriptionText = isAsteca ? `[ASTECA] ${topic.description}` : topic.description;
+          const splitDescription = doc.splitTextToSize(descriptionText, pageWidth - 2 * margin - (padding * 2));
+          
+          // Start description below the top margin to leave space for the badge
+          const descY = y + padding + 8; 
+          doc.text(splitDescription, margin + padding, descY);
+
+          if (isResolved) {
+              doc.setDrawColor(34, 197, 94);
+              doc.setLineWidth(0.2);
+              const actualLineHeight = doc.getLineHeight();
+              const textHeightMm = doc.getFontSize() / 2.83;
+              const strikeOffset = textHeightMm / 2;
+              
+              for (let i = 0; i < splitDescription.length; i++) {
+                  const textWidth = doc.getTextWidth(splitDescription[i]);
+                  const lineY = descY + (i * actualLineHeight) - strikeOffset;
+                  doc.line(margin + padding, lineY, margin + padding + textWidth, lineY);
+              }
+          }
+
+          y = descY + (splitDescription.length * 5) + 2;
+
+          // Add Photos
+          if (topic.media && topic.media.length > 0) {
+              const imgSize = 70;
+              const gap = 5;
+              let x = margin + padding;
+
+              for (const media of topic.media) {
+                  if (x + imgSize > pageWidth - margin - padding) {
+                      x = margin + padding;
+                      y += imgSize + gap;
+                  }
+
+                  if (y + imgSize > pageHeight - margin) {
+                      // If we need a new page for photos, we close the current box and start a new one on the next page
+                      doc.setDrawColor(200);
+                      doc.rect(margin, startY, pageWidth - 2 * margin, y - startY + 2);
+                      
+                      doc.addPage();
+                      y = 20;
+                      x = margin + padding;
+                      // Note: This is a simplified approach, ideally the box would continue
+                  }
+
+                  try {
+                      const url = getDisplayableDriveUrl(media.url);
+                      const resp = await fetch(url);
+                      const blob = await resp.blob();
+                      const b64 = await blobToBase64(blob);
+                      doc.addImage(b64, 'JPEG', x, y, imgSize, imgSize, undefined, 'FAST');
+                      doc.setDrawColor(220);
+                      doc.rect(x, y, imgSize, imgSize);
+
+                      if (isResolved) {
+                          // Diagonal "CONCLUÍDO" stamp across the photo
+                          doc.setTextColor(34, 197, 94); // text-green-500
+                          doc.setFontSize(22);
+                          doc.setFont("helvetica", "bold");
+                          
+                          const centerX = x + (imgSize / 2);
+                          const centerY = y + (imgSize / 2);
+                          
+                          // Rotate text 45 degrees (bottom-left to top-right)
+                          doc.text("CONCLUÍDO", centerX, centerY, { 
+                              align: 'center', 
+                              angle: 45
+                          });
+                      }
+
+                      x += imgSize + gap;
+                  } catch (e) {
+                      console.error("Error adding image to PDF:", e);
+                  }
+              }
+              y += imgSize + padding + 5;
+          } else {
+              y += padding + 5;
+          }
+          
+          // Draw the box around the entire topic (description + photos)
+          doc.setDrawColor(180);
+          doc.setLineWidth(0.2);
+          doc.rect(margin, startY, pageWidth - 2 * margin, y - startY);
+
+          // Counter Badge (X de Y) - Professional Badge attached to the top line
+          const counterText = `${currentTopicIndex} de ${totalGeneral}`;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7);
+          const counterWidth = doc.getTextWidth(counterText) + 6;
+          const badgeX = pageWidth - margin - counterWidth - 5;
+          const badgeY = startY - 2.5; // Overlapping the top line
+          
+          doc.setFillColor(30, 41, 59); // Slate-800
+          doc.roundedRect(badgeX, badgeY, counterWidth, 5, 1, 1, 'F');
+          
+          doc.setTextColor(255, 255, 255);
+          doc.text(counterText, badgeX + 3, badgeY + 3.5);
+          
+          y += 10; // Space between boxes
       }
+
+      // Final Summary for Photo Report
+      if (y > pageHeight - 30) {
+          doc.addPage();
+          y = 20;
+      }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(220, 38, 38);
+      doc.text(`Resumo Final:`, margin, y);
+      doc.text(`Total de ASTECAS: ${totalAsteca}`, margin, y + 8);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Total Geral de Pendências: ${totalGeneral}`, margin, y + 16);
 
       doc.save(`relatorio_pendencias_fotos_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
@@ -822,15 +885,26 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                 placeholder="Descreva o item da pendência..." 
                                             />
                                         </div>
-                                        <div className="sm:w-40">
-                                            <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
-                                            <input 
-                                                type="date" 
-                                                required 
-                                                value={topic.date} 
-                                                onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, date: e.target.value } : t))}
-                                                className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
-                                            />
+                                        <div className="sm:w-40 space-y-2">
+                                            <div>
+                                                <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
+                                                <input 
+                                                    type="date" 
+                                                    required 
+                                                    value={topic.date} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, date: e.target.value } : t))}
+                                                    className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
+                                                />
+                                            </div>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!topic.isAsteca} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, isAsteca: e.target.checked } : t))}
+                                                    className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                />
+                                                <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${topic.isAsteca ? 'text-red-600' : 'text-slate-400 group-hover:text-slate-600'}`}>ASTECA</span>
+                                            </label>
                                         </div>
                                     </div>
                                     
@@ -974,8 +1048,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${topicDays > 10 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
                                                                                                 {topicDays} dias
                                                                                             </span>
+                                                                                            {topic.isAsteca && (
+                                                                                                <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">ASTECA</span>
+                                                                                            )}
                                                                                         </div>
-                                                                                        <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : 'text-slate-700'}`}>
+                                                                                        <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : (topic.isAsteca ? 'text-red-600 font-bold' : 'text-slate-700')}`}>
                                                                                             {topic.description}
                                                                                         </p>
                                                                                     </div>
