@@ -765,6 +765,118 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
     }
   };
 
+  const handleGenerateAstecaPDF = () => {
+    const doc = new jsPDF();
+    
+    // Filter issues to include only ASTECA topics
+    let filteredIssues = agendaIssues.map(issue => {
+        const normalized = issue.topics ? {
+            ...issue,
+            topics: issue.topics.map(t => ({ ...t, date: t.date || issue.date }))
+        } : {
+            ...issue,
+            topics: [{
+                id: generateUUID(),
+                description: (issue as any).description || '',
+                media: (issue as any).media || [],
+                status: (issue as any).status || 'Pending',
+                date: issue.date,
+                isAsteca: (issue as any).isAsteca || false
+            }]
+        } as AgendaIssue;
+
+        return {
+            ...normalized,
+            topics: normalized.topics.filter(t => {
+                if (!t.isAsteca) return false;
+                if (reportStatus === 'PENDING') return t.status === 'Pending';
+                if (reportStatus === 'RESOLVED') return t.status === 'Resolved';
+                return true;
+            })
+        };
+    }).filter(i => i.topics.length > 0);
+
+    if (startDate) filteredIssues = filteredIssues.filter(i => i.date >= startDate);
+    if (endDate) filteredIssues = filteredIssues.filter(i => i.date <= endDate);
+    if (reportClient) filteredIssues = filteredIssues.filter(i => i.clientName === reportClient);
+
+    // Flatten and Group by Client
+    const clientGroups: Record<string, any[]> = {};
+    filteredIssues.forEach(issue => {
+        if (!clientGroups[issue.clientName]) clientGroups[issue.clientName] = [];
+        issue.topics.forEach(topic => {
+            clientGroups[issue.clientName].push(topic);
+        });
+    });
+
+    const sortedClients = Object.keys(clientGroups).sort();
+    const totalClients = sortedClients.length;
+    const totalAstecas = Object.values(clientGroups).reduce((sum, topics) => sum + topics.length, 0);
+
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(220, 38, 38); // Red-600
+    doc.text(reportClient ? "Relatório de ASTECAS" : "Relatório Geral de ASTECAS", 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 28);
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(reportClient ? "Resumo:" : "Resumo Geral:", 14, 38);
+    doc.setFont("helvetica", "normal");
+    
+    let summaryY = 44;
+    if (!reportClient) {
+        doc.text(`Total de Clientes com ASTECAS: ${totalClients}`, 14, summaryY);
+        summaryY += 6;
+    }
+    doc.text(`Total de ASTECAS: ${totalAstecas}`, 14, summaryY);
+
+    let currentY = summaryY + 10;
+
+    sortedClients.forEach((clientName) => {
+        const topics = clientGroups[clientName].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        if (currentY > 250) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${clientName} (${topics.length} ASTECAS)`, 14, currentY);
+        currentY += 5;
+
+        const tableColumn = ["Data", "Dias", "Descrição", "Status"];
+        const tableRows = topics.map(t => [
+            new Date(t.date + 'T12:00:00Z').toLocaleDateString('pt-BR'),
+            `${calculateDaysFromDate(t.date)}d`,
+            t.description,
+            t.status === 'Pending' ? 'Pendente' : 'Resolvido'
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: currentY,
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [220, 38, 38] }, // Red-600
+            alternateRowStyles: { fillColor: [254, 242, 242] }, // Red-50
+            margin: { left: 14, right: 14 },
+            didDrawPage: (data) => {
+                currentY = data.cursor ? data.cursor.y : currentY;
+            }
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 15;
+    });
+
+    doc.save(`relatorio_geral_astecas_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn font-app max-w-5xl mx-auto font-normal">
       {/* Header & Tabs */}
@@ -849,6 +961,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 className="bg-blue-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-blue-700 flex items-center gap-2 h-[34px] disabled:opacity-50"
               >
                   <PhotoIcon className="w-4 h-4" /> {isGenerating ? 'Gerando...' : 'Relatório com Fotos'}
+              </button>
+              <button 
+                onClick={handleGenerateAstecaPDF} 
+                className="bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-red-700 flex items-center gap-2 h-[34px]"
+              >
+                  <BellIcon className="w-4 h-4" /> Relatório ASTECAS
               </button>
           </div>
       )}
