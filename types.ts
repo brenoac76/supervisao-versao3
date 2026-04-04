@@ -8,20 +8,25 @@ export enum ChecklistStatus {
 export interface Media {
   id: string;
   type: 'image' | 'video';
-  url: string; // Data URL
+  url: string; // Annotated/Current URL
+  originalUrl?: string; // Original URL for reverting
   name: string;
   observation?: string; 
+  annotations?: Annotation[];
 }
 
 export interface Annotation {
   id: string;
-  type: 'text' | 'arrow' | 'curvedArrow';
+  type: 'text' | 'arrow' | 'circle' | 'curvedArrow';
   x: number;
   y: number;
   content?: string;
   angle?: number;
   scale?: number;
   color: string;
+  width?: number;
+  height?: number;
+  radius?: number;
 }
 
 export interface ProjectFile {

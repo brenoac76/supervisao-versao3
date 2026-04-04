@@ -7,6 +7,7 @@ import { fetchWithRetry, SCRIPT_URL } from '../utils/api';
 import Modal from './Modal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import PhotoEditor from './PhotoEditor';
 
 interface PersonalAgendaProps {
   user: User;
@@ -99,6 +100,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
     { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }
   ]);
   const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
+  const [editingMedia, setEditingMedia] = useState<{ media: Media; topicId: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Media Viewer State
@@ -126,7 +128,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           // Check if any topic in this issue is an open ASTECA
           return item.topics?.some(t => t.isAsteca && t.status === 'Pending');
         }
-        return filter === 'PENDING' ? item.status === 'Pending' : item.status === 'Resolved';
+        const hasPending = item.topics?.some(t => t.status === 'Pending');
+        return filter === 'PENDING' ? hasPending : !hasPending;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [agendaIssues, filter]);
@@ -299,7 +302,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       
       setFormTopics(prev => prev.map(t => t.id === topicId ? { 
         ...t, 
-        media: t.media.map(m => m.id === tempId ? { ...m, url: result.url } : m) 
+        media: t.media.map(m => m.id === tempId ? { ...m, url: result.url, originalUrl: result.url } : m) 
       } : t));
     } catch (error: any) {
         alert(`Erro no upload: ${error.message}`);
@@ -688,9 +691,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
                   try {
                       const url = getDisplayableDriveUrl(media.url);
-                      const resp = await fetch(url);
-                      const blob = await resp.blob();
-                      const b64 = await blobToBase64(blob);
+                      let b64: string;
+                      
+                      if (url && url.startsWith('data:')) {
+                          b64 = url;
+                      } else {
+                          const resp = await fetch(url!);
+                          const blob = await resp.blob();
+                          b64 = await blobToBase64(blob);
+                      }
+                      
                       doc.addImage(b64, 'JPEG', x, y, imgSize, imgSize, undefined, 'FAST');
                       doc.setDrawColor(220);
                       doc.rect(x, y, imgSize, imgSize);
@@ -1046,9 +1056,26 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                     
                                     <div className="flex flex-wrap gap-2 pl-7">
                                         {topic.media.map(m => (
-                                            <div key={m.id} className="relative w-16 h-16">
+                                            <div key={m.id} className="relative w-16 h-16 group">
                                                 <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover rounded-lg border border-slate-200" />
-                                                <button type="button" onClick={() => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, media: t.media.filter(x => x.id !== m.id) } : t))} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">&times;</button>
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setEditingMedia({ media: m, topicId: topic.id })}
+                                                        className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-blue-600 shadow-lg"
+                                                        title="Editar Foto"
+                                                    >
+                                                        <PencilIcon className="w-3 h-3" />
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, media: t.media.filter(x => x.id !== m.id) } : t))} 
+                                                        className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 shadow-lg"
+                                                        title="Excluir"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                         <label className={`w-16 h-16 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors ${uploadingTopicId === topic.id ? 'opacity-50' : ''}`}>
@@ -1101,6 +1128,65 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           )}
           </div>
         </Modal>
+      )}
+
+      {editingMedia && (
+        <PhotoEditor 
+          media={editingMedia.media}
+          onClose={() => setEditingMedia(null)}
+          onSave={async (updatedMedia) => {
+            let finalMedia = updatedMedia;
+            
+            // If the URL is a data URL (edited image), upload it to Drive to ensure persistence
+            if (updatedMedia.url.startsWith('data:')) {
+              try {
+                setUploadingTopicId(editingMedia.topicId);
+                const base64Data = updatedMedia.url;
+                const response = await fetchWithRetry(SCRIPT_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  body: JSON.stringify({ 
+                    action: 'UPLOAD_FILE', 
+                    data: { 
+                      base64Data, 
+                      fileName: `edited_${updatedMedia.name || 'photo.jpg'}`, 
+                      mimeType: 'image/jpeg' 
+                    } 
+                  }),
+                });
+                const result = await response.json();
+                if (result.success && result.url) {
+                  finalMedia = { ...updatedMedia, url: result.url };
+                }
+              } catch (error) {
+                console.error("Erro ao salvar foto editada na nuvem:", error);
+                alert("A foto foi editada localmente, mas houve um erro ao salvar na nuvem. Ela pode não persistir ao recarregar.");
+              } finally {
+                setUploadingTopicId(null);
+              }
+            }
+
+            const updatedTopics = formTopics.map(t => 
+              t.id === editingMedia.topicId 
+                ? { ...t, media: t.media.map(m => m.id === finalMedia.id ? finalMedia : m) }
+                : t
+            );
+
+            setFormTopics(updatedTopics);
+
+            // Se estiver editando uma pendência já existente, salva imediatamente no banco
+            if (editingIssueId) {
+                const updatedIssues = agendaIssues.map(issue => 
+                    issue.id === editingIssueId 
+                    ? { ...issue, topics: updatedTopics, clientName: issueClient.trim(), date: issueDate }
+                    : issue
+                );
+                onUpdateAgendaIssues(updatedIssues);
+            }
+
+            setEditingMedia(null);
+          }}
+        />
       )}
 
       {/* List Content */}
