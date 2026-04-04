@@ -104,7 +104,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Media Viewer State
-  const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number } | null>(null);
+  const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number; topicId?: string; issue?: AgendaIssue } | null>(null);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
 
   const uniqueClients = useMemo(() => {
@@ -890,7 +890,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   return (
     <div className="space-y-6 animate-fadeIn font-app max-w-5xl mx-auto font-normal">
       {/* Header & Tabs */}
-      <div className="sticky top-0 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-b-2xl sm:rounded-2xl border-b sm:border border-slate-200 shadow-sm -mx-4 sm:mx-0">
+      <div className="sticky top-0 z-40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-b-2xl sm:rounded-2xl border-b sm:border border-slate-200 shadow-sm -mx-4 sm:mx-0">
         <div>
           <h2 className="text-lg sm:text-xl font-normal text-slate-800 uppercase tracking-tighter flex items-center gap-2">
             <BellIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" /> Agenda de {user.username}
@@ -1196,7 +1196,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left font-normal border-collapse">
-                        <thead className="sticky top-[140px] sm:top-[80px] z-20">
+                        <thead>
                             <tr className="bg-slate-900 text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
                                 <th className="p-3 sm:p-4 w-24 sm:w-32">Data</th>
                                 <th className="p-3 sm:p-4">Cliente</th>
@@ -1289,7 +1289,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                                         <button 
                                                                                             onClick={(e) => {
                                                                                                 e.stopPropagation();
-                                                                                                setViewingMedia({ list: topic.media, index: 0 });
+                                                                                                setViewingMedia({ list: topic.media, index: 0, topicId: topic.id, issue: issue });
                                                                                             }}
                                                                                             className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                                                                                             title="Ver Fotos"
@@ -1384,6 +1384,27 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                         className="max-h-full max-w-full object-contain"
                     />
                 </div>
+                
+                <div className="absolute top-4 right-16 flex items-center gap-2">
+                    {viewingMedia.topicId && viewingMedia.issue && (
+                        <button 
+                            onClick={() => {
+                                const currentMedia = viewingMedia.list[viewingMedia.index];
+                                const currentTopicId = viewingMedia.topicId!;
+                                const currentIssue = viewingMedia.issue!;
+                                
+                                // Prepare for editing
+                                handleEditIssue(currentIssue);
+                                setEditingMedia({ media: currentMedia, topicId: currentTopicId });
+                                setViewingMedia(null);
+                            }}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg"
+                        >
+                            <PencilIcon className="w-4 h-4" /> Editar Foto
+                        </button>
+                    )}
+                </div>
+
                 {viewingMedia.list.length > 1 && (
                     <>
                         <button className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/10 rounded-full text-white" onClick={() => setViewingMedia(prev => prev ? { ...prev, index: (prev.index - 1 + prev.list.length) % prev.list.length } : null)}><ChevronLeftIcon className="w-8 h-8"/></button>
