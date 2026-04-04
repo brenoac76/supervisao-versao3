@@ -890,31 +890,31 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   return (
     <div className="space-y-6 animate-fadeIn font-app max-w-5xl mx-auto font-normal">
       {/* Header & Tabs */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="sticky top-0 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-b-2xl sm:rounded-2xl border-b sm:border border-slate-200 shadow-sm -mx-4 sm:mx-0">
         <div>
-          <h2 className="text-xl font-normal text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-            <BellIcon className="w-6 h-6 text-blue-600" /> Agenda de {user.username}
+          <h2 className="text-lg sm:text-xl font-normal text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+            <BellIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" /> Agenda de {user.username}
           </h2>
-          <p className="text-[10px] font-normal text-slate-400 uppercase tracking-widest">{viewMode === 'LIST' ? 'Lista Técnica de Pendências' : 'Compromissos Pessoais e Futuros'}</p>
+          <p className="text-[9px] sm:text-[10px] font-normal text-slate-400 uppercase tracking-widest">{viewMode === 'LIST' ? 'Lista Técnica de Pendências' : 'Compromissos Pessoais e Futuros'}</p>
         </div>
         
         <div className="flex gap-2 w-full sm:w-auto">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
+          <div className="flex bg-slate-100 p-1 rounded-xl flex-grow sm:flex-grow-0">
             <button 
               onClick={() => setFilter('PENDING')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
             >
               Pendentes
             </button>
             <button 
               onClick={() => setFilter('ASTECA')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
             >
               ASTECAS
             </button>
             <button 
               onClick={() => setFilter('DONE')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
             >
               Concluídos
             </button>
@@ -927,9 +927,10 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }]);
                 setIsAdding(true);
             }}
-            className="flex-grow sm:flex-none bg-blue-600 text-white px-5 py-2 rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="bg-blue-600 text-white p-2 sm:px-5 sm:py-2 rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            title="Novo Registro"
           >
-            <PlusCircleIcon className="w-4 h-4" /> Novo Registro
+            <PlusCircleIcon className="w-5 h-5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Novo Registro</span>
           </button>
         </div>
       </div>
@@ -1195,12 +1196,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left font-normal border-collapse">
-                        <thead>
-                            <tr className="bg-slate-900 text-white text-[10px] md:text-[10px] uppercase tracking-widest font-normal">
-                                <th className="p-4 w-32">Data</th>
-                                <th className="p-4">Cliente</th>
-                                <th className="p-4 w-24 text-center">Dias</th>
-                                <th className="p-4 w-24 text-right">Ações</th>
+                        <thead className="sticky top-[140px] sm:top-[80px] z-20">
+                            <tr className="bg-slate-900 text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
+                                <th className="p-3 sm:p-4 w-24 sm:w-32">Data</th>
+                                <th className="p-3 sm:p-4">Cliente</th>
+                                <th className="p-3 sm:p-4 w-16 sm:w-24 text-center">Dias</th>
+                                <th className="p-3 sm:p-4 w-16 sm:w-24 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-[14px] md:text-[11px]">
@@ -1242,9 +1243,13 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase">
                                                                             Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
                                                                         </span>
-                                                                        <div className="flex gap-2">
-                                                                            <button onClick={() => handleEditIssue(issue)} className="text-blue-600 hover:underline text-[10px] font-bold uppercase">Editar</button>
-                                                                            <button onClick={() => deleteIssue(issue.id)} className="text-red-600 hover:underline text-[10px] font-bold uppercase">Excluir</button>
+                                                                        <div className="flex gap-3">
+                                                                            <button onClick={() => handleEditIssue(issue)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
+                                                                                <PencilIcon className="w-3 h-3" /> Editar
+                                                                            </button>
+                                                                            <button onClick={() => deleteIssue(issue.id)} className="flex items-center gap-1 text-red-600 hover:text-red-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
+                                                                                <TrashIcon className="w-3 h-3" /> Excluir
+                                                                            </button>
                                                                         </div>
                                                                     </div>
                                                                     {issue.topics.map((topic, idx) => {

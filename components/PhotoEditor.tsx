@@ -222,49 +222,66 @@ const PhotoEditor: React.FC<PhotoEditorProps> = ({ media, onSave, onClose }) => 
   return (
     <div className="fixed inset-0 bg-black/90 z-[999] flex flex-col">
       {/* Toolbar */}
-      <div className="bg-slate-900 p-4 flex items-center justify-between border-b border-slate-800">
-        <div className="flex items-center gap-4">
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-2">
-            <XIcon className="w-6 h-6" />
+      <div className="bg-slate-900 p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between border-b border-slate-800 gap-3">
+        <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-2">
+              <XIcon className="w-6 h-6" />
+            </button>
+            <h3 className="text-white font-medium text-xs sm:text-sm uppercase tracking-widest truncate">Editor de Foto</h3>
+          </div>
+          
+          {/* Mobile Save Button (visible only on small screens) */}
+          <button 
+            onClick={handleSave} 
+            disabled={isSaving}
+            className="sm:hidden bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 px-3 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50"
+          >
+            {isSaving ? <RotateCwIcon className="w-3 h-3 animate-spin" /> : <SaveIcon className="w-3 h-3" />}
+            Salvar
           </button>
-          <h3 className="text-white font-medium text-sm uppercase tracking-widest">Editor de Foto</h3>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0">
           {selectedAnnotation?.type === 'text' && (
-            <div className="flex items-center gap-2 mr-4 bg-slate-800 p-1 px-2 rounded-lg border border-slate-700">
+            <div className="flex items-center gap-2 mr-2 bg-slate-800 p-1 px-2 rounded-lg border border-slate-700 shrink-0">
               <span className="text-[9px] text-slate-500 uppercase font-bold">Texto:</span>
               <input 
                 type="text" 
                 value={selectedAnnotation.content || ''} 
                 onChange={(e) => handleTextChange(selectedAnnotation.id, e.target.value)}
-                className="bg-transparent border-none outline-none text-white text-xs w-32"
+                className="bg-transparent border-none outline-none text-white text-[10px] w-24 sm:w-32"
                 autoFocus
               />
             </div>
           )}
-          <button onClick={handleAddText} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-xs uppercase tracking-wider">
-            <TypeIcon className="w-4 h-4" /> Texto
-          </button>
-          <button onClick={handleAddArrow} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-xs uppercase tracking-wider">
-            <ArrowUpRightIcon className="w-4 h-4" /> Seta
-          </button>
-          <button onClick={handleAddCircle} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-xs uppercase tracking-wider">
-            <CircleIcon className="w-4 h-4" /> Círculo
-          </button>
-          <div className="w-px h-6 bg-slate-700 mx-2" />
-          <button onClick={handleDeleteSelected} disabled={!selectedId} className="bg-red-900/50 text-red-400 p-2 rounded-lg hover:bg-red-900 flex items-center gap-2 px-3 text-xs uppercase tracking-wider disabled:opacity-30">
-            <Trash2Icon className="w-4 h-4" /> Excluir
-          </button>
-          <button onClick={handleRevertAll} className="bg-slate-800 text-slate-400 p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-xs uppercase tracking-wider" title="Remover todas as marcações">
-            <RotateCwIcon className="w-4 h-4" /> Reverter
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={handleAddText} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-[10px] uppercase tracking-wider">
+              <TypeIcon className="w-4 h-4" /> <span className="hidden sm:inline">Texto</span>
+            </button>
+            <button onClick={handleAddArrow} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-[10px] uppercase tracking-wider">
+              <ArrowUpRightIcon className="w-4 h-4" /> <span className="hidden sm:inline">Seta</span>
+            </button>
+            <button onClick={handleAddCircle} className="bg-slate-800 text-white p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-[10px] uppercase tracking-wider">
+              <CircleIcon className="w-4 h-4" /> <span className="hidden sm:inline">Círculo</span>
+            </button>
+          </div>
+          <div className="w-px h-6 bg-slate-700 mx-1 shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={handleDeleteSelected} disabled={!selectedId} className="bg-red-900/50 text-red-400 p-2 rounded-lg hover:bg-red-900 flex items-center gap-2 px-3 text-[10px] uppercase tracking-wider disabled:opacity-30">
+              <Trash2Icon className="w-4 h-4" /> <span className="hidden sm:inline">Excluir</span>
+            </button>
+            <button onClick={handleRevertAll} className="bg-slate-800 text-slate-400 p-2 rounded-lg hover:bg-slate-700 flex items-center gap-2 px-3 text-[10px] uppercase tracking-wider" title="Remover todas as marcações">
+              <RotateCwIcon className="w-4 h-4" /> <span className="hidden sm:inline">Reverter</span>
+            </button>
+          </div>
         </div>
 
+        {/* Desktop Save Button (hidden on small screens) */}
         <button 
           onClick={handleSave} 
           disabled={isSaving}
-          className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 px-4 text-xs uppercase tracking-wider font-bold disabled:opacity-50"
+          className="hidden sm:flex bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 items-center gap-2 px-4 text-xs uppercase tracking-wider font-bold disabled:opacity-50"
         >
           {isSaving ? (
             <>
