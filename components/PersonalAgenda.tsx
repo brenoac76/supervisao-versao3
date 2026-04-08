@@ -123,9 +123,20 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
         body: JSON.stringify({ text }),
       });
 
+      const contentType = response.headers.get("content-type");
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao processar texto com IA.");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Erro ao processar texto com IA.");
+        } else {
+          const errorText = await response.text();
+          console.error("Erro do servidor (não-JSON):", errorText.substring(0, 200));
+          throw new Error(`Erro do servidor (${response.status}). O servidor pode estar reiniciando ou com problemas de rota.`);
+        }
+      }
+
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("O servidor retornou um formato inválido (não-JSON).");
       }
 
       const data = await response.json();
