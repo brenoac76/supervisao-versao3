@@ -118,16 +118,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
     setAiError(null);
     
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
       
-      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY') {
-        throw new Error("Chave da API Gemini não configurada. Por favor, configure a GEMINI_API_KEY nas configurações do sistema.");
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
+        console.warn("Aviso: Chave de API não detectada. Tentando prosseguir...");
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: apiKey || "" });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Melhore o seguinte texto de uma pendência técnica de montagem de móveis, deixando-o mais profissional, claro e formal, mas mantendo a objetividade. Retorne APENAS o texto melhorado, sem comentários adicionais: "${text}"`,
+        contents: [{ role: "user", parts: [{ text: `Melhore o seguinte texto de uma pendência técnica de montagem de móveis, deixando-o mais profissional, claro e formal, mantendo a objetividade. Retorne APENAS o texto melhorado, sem comentários adicionais: "${text}"` }] }],
       });
       
       const improvedText = response.text;
