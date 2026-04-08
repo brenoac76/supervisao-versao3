@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Client, MaterialOrder, MaterialOrderItem, Media } from '../types';
 import { generateUUID, SCRIPT_URL } from '../App';
 import { fetchWithRetry } from '../utils/api';
-import { GoogleGenAI, Type } from "@google/genai";
 import Modal from './Modal';
 import { 
   ShoppingCartIcon, 
@@ -74,21 +73,22 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
 
   const analyzeLabelExhaustive = async (base64Data: string) => {
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: [{
-            parts: [
-              { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
-              { text: "Aja como um scanner industrial de precisão. Extraia ABSOLUTAMENTE TODOS os dados técnicos desta etiqueta de móveis Todeschini. Procure especificamente por: CLIENTE, OC COMPRA, MJF, PEDIDO, CÓDIGO DO ITEM, DESCRIÇÃO DA PEÇA, VOL, PC, LINHA, COR, PADRÃO, CÓDIGO DE IDENTIFICAÇÃO. Retorne EXCLUSIVAMENTE um array JSON puro: [ { \"label\": \"NOME DO CAMPO\", \"value\": \"VALOR\" } ]. Não inclua explicações ou blocos de código markdown como ```json." }
-            ]
-          }],
-          config: { 
-              responseMimeType: "application/json"
-          }
+        const response = await fetch("/api/ai/analyze-label", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            image: base64Data,
+            prompt: "Aja como um scanner industrial de precisão. Extraia ABSOLUTAMENTE TODOS os dados técnicos desta etiqueta de móveis Todeschini. Procure especificamente por: CLIENTE, OC COMPRA, MJF, PEDIDO, CÓDIGO DO ITEM, DESCRIÇÃO DA PEÇA, VOL, PC, LINHA, COR, PADRÃO, CÓDIGO DE IDENTIFICAÇÃO. Retorne EXCLUSIVAMENTE um array JSON puro: [ { \"label\": \"NOME DO CAMPO\", \"value\": \"VALOR\" } ]. Não inclua explicações ou blocos de código markdown como ```json."
+          }),
         });
-        
-        let rawText = response.text || '[]';
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Erro ao processar imagem com IA.");
+        }
+
+        const data = await response.json();
+        let rawText = data.text || '[]';
         // SANITIZAÇÃO VITAL PARA O DEPLOY
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         

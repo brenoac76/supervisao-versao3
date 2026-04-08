@@ -8,7 +8,6 @@ import Modal from './Modal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PhotoEditor from './PhotoEditor';
-import { GoogleGenAI } from "@google/genai";
 
 interface PersonalAgendaProps {
   user: User;
@@ -118,19 +117,19 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
     setAiError(null);
     
     try {
-      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-      
-      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
-        console.warn("Aviso: Chave de API não detectada no ambiente. A IA pode falhar se a chave não estiver configurada nos Secrets do AI Studio.");
+      const response = await fetch("/api/ai/professionalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao processar texto com IA.");
       }
 
-      const ai = new GoogleGenAI({ apiKey: apiKey || "" });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: `Melhore o seguinte texto de uma pendência técnica de montagem de móveis, deixando-o mais profissional, claro e formal, mantendo a objetividade. Retorne APENAS o texto melhorado, sem comentários adicionais: "${text}"` }] }],
-      });
-      
-      const improvedText = response.text;
+      const data = await response.json();
+      const improvedText = data.text;
       if (improvedText) {
         if (type === 'topic' && id) {
           setFormTopics(prev => prev.map(t => t.id === id ? { ...t, description: improvedText } : t));
