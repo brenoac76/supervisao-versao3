@@ -111,7 +111,12 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    // Em Express 5, o wildcard '*' precisa ser explícito ou usar parâmetros
+    app.get('*', (req, res) => {
+      // Se a requisição for para /api e chegou aqui, é porque a rota não existe
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: `API route ${req.path} not found` });
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
