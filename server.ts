@@ -26,58 +26,72 @@ async function startServer() {
     res.json({ status: "ok", env: process.env.NODE_ENV });
   });
 
-  // ... (rest of the code)
+  // Helper para chamar a IA (Tenta API Key primeiro, depois Vertex AI)
   const callAI = async (prompt: string, image?: { mimeType: string, data: string }) => {
     const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY;
-    const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.PROJECT_ID;
+    
+    // Tenta encontrar o ID do projeto em várias variáveis comuns do Google Cloud
+    const project = process.env.GOOGLE_CLOUD_PROJECT || 
+                    process.env.PROJECT_ID || 
+                    process.env.GCP_PROJECT || 
+                    process.env.GOOGLE_PROJECT_ID;
+                    
     const location = process.env.GOOGLE_CLOUD_REGION || process.env.REGION || 'us-central1';
 
-    console.log(`[AI] Request. Key: ${apiKey ? 'Present' : 'Missing'}, Project: ${project || 'Missing'}`);
+    console.log(`[AI] Iniciando chamada. API Key: ${apiKey ? 'Detectada' : 'Ausente'}, Projeto: ${project || 'Não detectado'}`);
 
-    // 1. Tenta via API Key (GoogleGenAI)
-    if (apiKey && apiKey !== 'undefined' && apiKey !== 'null' && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.length > 10) {
+    // 1. Tenta via API Key (GoogleGenAI) - Método mais comum e simples
+    if (apiKey && apiKey !== 'undefined' && apiKey !== 'null' && apiKey.length > 10) {
       try {
         console.log("[AI] Tentando via GoogleGenAI (API Key)...");
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new (GoogleGenAI as any)(apiKey);
+        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
         const contents = image 
-          ? [{ parts: [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.data } }] }]
+          ? [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.data } }] }]
           : [{ role: "user", parts: [{ text: prompt }] }];
           
-        const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash", // Usando 1.5-flash como fallback estável
-          contents: contents as any,
-        });
-        return response.text;
+        const result = await model.generateContent({ contents: contents as any });
+        const response = await result.response;
+        return response.text();
       } catch (err: any) {
         console.error("[AI] Erro via GoogleGenAI:", err.message);
-        if (!project) throw err; // Se não tem projeto, não tem como tentar Vertex
+        // Se falhou por causa da chave, mas temos um projeto, tentamos Vertex
+        if (!project) throw new Error(`Erro na API Key: ${err.message}. Por favor, verifique a GEMINI_API_KEY nos Secrets.`);
       }
     }
 
-    // 2. Tenta via Vertex AI (Identity-based / Service Account)
-    if (project) {
-      try {
-        console.log("[AI] Tentando via Vertex AI (Identity-based)...");
-        const vertexAI = new VertexAI({ project, location });
-        const model = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        
-        const parts: any[] = image 
-          ? [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.data } }]
-          : [{ text: prompt }];
+    // 2. Tenta via Vertex AI (Autenticação por Identidade do Servidor)
+    // Mesmo sem o ID do projeto explícito, o SDK da Vertex pode tentar se auto-configurar no Cloud Run
+    try {
+      console.log("[AI] Tentando via Vertex AI (Identity-based)...");
+      const vertexAI = new VertexAI({ 
+        project: project || undefined, 
+        location: location 
+      });
+      const model = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      const parts: any[] = image 
+        ? [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.data } }]
+        : [{ text: prompt }];
 
-        const result = await model.generateContent({
-          contents: [{ role: "user", parts }],
-        });
-        
-        const response = result.response;
-        return response.candidates?.[0]?.content?.parts?.[0]?.text;
-      } catch (err: any) {
-        console.error("[AI] Erro via Vertex AI:", err.message);
-        throw err;
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts }],
+      });
+      
+      const response = result.response;
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+      throw new Error("Resposta da Vertex AI veio vazia.");
+    } catch (err: any) {
+      console.error("[AI] Erro via Vertex AI:", err.message);
+      
+      // Se chegamos aqui, ambas as tentativas falharam
+      if (!apiKey) {
+        throw new Error("Configuração de IA Pendente: A GEMINI_API_KEY não foi encontrada. No link externo, você precisa ir em 'Settings' -> 'Secrets' e adicionar a chave GEMINI_API_KEY para que a IA funcione.");
       }
+      throw err;
     }
-
-    throw new Error("Nenhuma forma de autenticação de IA disponível (API Key ou Projeto Cloud ausentes). No link externo, por favor adicione a GEMINI_API_KEY nos Secrets.");
   };
 
   // API para Profissionalizar Texto
