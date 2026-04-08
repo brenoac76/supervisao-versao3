@@ -121,7 +121,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
       
       if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
-        console.warn("Aviso: Chave de API não detectada. Tentando prosseguir...");
+        console.warn("Aviso: Chave de API não detectada no ambiente.");
+        // Se estiver no link externo (produção), avisar sobre o segredo
+        if (window.location.hostname !== 'localhost' && !window.location.hostname.includes('ais-dev')) {
+           throw new Error("Configuração Necessária: No link externo, você precisa adicionar a GEMINI_API_KEY nos 'Secrets' do AI Studio e clicar em 'Deploy'.");
+        }
       }
 
       const ai = new GoogleGenAI({ apiKey: apiKey || "" });
