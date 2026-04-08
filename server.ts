@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
@@ -21,7 +20,7 @@ async function startServer() {
     res.json({ status: "ok", env: process.env.NODE_ENV });
   });
 
-  // Helper para chamar a IA (Tenta API Key primeiro, depois Vertex AI)
+  // ... (rest of the code)
   const callAI = async (prompt: string, image?: { mimeType: string, data: string }) => {
     const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY;
     const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.PROJECT_ID;
@@ -103,6 +102,7 @@ async function startServer() {
 
   // Configuração do Vite
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
