@@ -340,7 +340,7 @@ const App: React.FC = () => {
           const agendaResult = await agendaResponse.json();
           if (agendaResult.success && Array.isArray(agendaResult.data)) setAgendaItems(agendaResult.data);
       }
-      if (agendaIssuesPromise) {
+      if (agendaIssuesResponse) {
           const agendaIssuesResult = await agendaIssuesResponse.json();
           if (agendaIssuesResult.success && Array.isArray(agendaIssuesResult.data)) setAgendaIssues(agendaIssuesResult.data);
       }

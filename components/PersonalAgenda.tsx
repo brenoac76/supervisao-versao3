@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { AgendaItem, User, AgendaIssue, Media } from '../types';
-import { PlusCircleIcon, TrashIcon, CheckCircleIcon, CalendarDaysIcon, BellIcon, RefreshIcon, XIcon, CameraIcon, CameraIcon as PhotoIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, PrinterIcon, PencilIcon } from './icons';
+import { PlusCircleIcon, TrashIcon, CheckCircleIcon, CalendarDaysIcon, BellIcon, RefreshIcon, XIcon, CameraIcon, CameraIcon as PhotoIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, PrinterIcon, PencilIcon, SparklesIcon } from './icons';
 import { generateUUID } from '../App';
 import { fetchWithRetry, SCRIPT_URL } from '../utils/api';
 import Modal from './Modal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PhotoEditor from './PhotoEditor';
+import { GoogleGenAI } from "@google/genai";
 
 interface PersonalAgendaProps {
   user: User;
@@ -106,6 +107,35 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   // Media Viewer State
   const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number; topicId?: string; issue?: AgendaIssue } | null>(null);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [isProfessionalizing, setIsProfessionalizing] = useState<string | null>(null); // topicId or 'reminder'
+
+  const handleProfessionalizeText = async (text: string, type: 'topic' | 'reminder', id?: string) => {
+    if (!text.trim()) return;
+    
+    const loadingId = id || 'reminder';
+    setIsProfessionalizing(loadingId);
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Melhore o seguinte texto de uma pendência técnica de montagem de móveis, deixando-o mais profissional, claro e formal, mas mantendo a objetividade. Retorne APENAS o texto melhorado, sem comentários adicionais: "${text}"`,
+      });
+      
+      const improvedText = response.text;
+      if (improvedText) {
+        if (type === 'topic' && id) {
+          setFormTopics(prev => prev.map(t => t.id === id ? { ...t, description: improvedText } : t));
+        } else if (type === 'reminder') {
+          setDescription(improvedText);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao profissionalizar texto:", error);
+    } finally {
+      setIsProfessionalizing(null);
+    }
+  };
 
   const uniqueClients = useMemo(() => {
       const clients = new Set(agendaIssues.map(i => i.clientName));
@@ -1024,13 +1054,28 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                     <div className="flex flex-col sm:flex-row gap-3">
                                         <div className="flex gap-3 flex-grow">
                                             <span className="text-slate-400 font-bold text-sm mt-2">{index + 1}.</span>
-                                            <textarea 
-                                                required 
-                                                value={topic.description} 
-                                                onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, description: e.target.value } : t))}
-                                                className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
-                                                placeholder="Descreva o item da pendência..." 
-                                            />
+                                            <div className="relative flex-grow">
+                                                <textarea 
+                                                    required 
+                                                    value={topic.description} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, description: e.target.value } : t))}
+                                                    className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
+                                                    placeholder="Descreva o item da pendência..." 
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleProfessionalizeText(topic.description, 'topic', topic.id)}
+                                                    disabled={isProfessionalizing === topic.id}
+                                                    className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                                                        isProfessionalizing === topic.id 
+                                                        ? 'bg-slate-100 text-slate-400' 
+                                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                                    }`}
+                                                    title="Melhorar com IA"
+                                                >
+                                                    <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === topic.id ? 'animate-pulse' : ''}`} />
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="sm:w-40 space-y-2">
                                             <div>
@@ -1118,7 +1163,27 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Descrição Detalhada (Opcional)</label>
-                    <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-28 resize-none bg-slate-50 focus:bg-white transition-all" placeholder="Mais detalhes sobre esta tarefa..." />
+                    <div className="relative">
+                        <textarea 
+                            value={description} 
+                            onChange={e => setDescription(e.target.value)} 
+                            className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-28 resize-none bg-slate-50 focus:bg-white transition-all" 
+                            placeholder="Mais detalhes sobre esta tarefa..." 
+                        />
+                        <button
+                            type="button"
+                            onClick={() => handleProfessionalizeText(description, 'reminder')}
+                            disabled={isProfessionalizing === 'reminder'}
+                            className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                                isProfessionalizing === 'reminder' 
+                                ? 'bg-slate-100 text-slate-400' 
+                                : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                            }`}
+                            title="Melhorar com IA"
+                        >
+                            <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === 'reminder' ? 'animate-pulse' : ''}`} />
+                        </button>
+                    </div>
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-2">
