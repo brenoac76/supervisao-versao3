@@ -108,15 +108,23 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number; topicId?: string; issue?: AgendaIssue } | null>(null);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [isProfessionalizing, setIsProfessionalizing] = useState<string | null>(null); // topicId or 'reminder'
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const handleProfessionalizeText = async (text: string, type: 'topic' | 'reminder', id?: string) => {
     if (!text.trim()) return;
     
     const loadingId = id || 'reminder';
     setIsProfessionalizing(loadingId);
+    setAiError(null);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'MY_GEMINI_API_KEY') {
+        throw new Error("Chave da API Gemini não configurada. Por favor, configure a GEMINI_API_KEY nas configurações do sistema.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Melhore o seguinte texto de uma pendência técnica de montagem de móveis, deixando-o mais profissional, claro e formal, mas mantendo a objetividade. Retorne APENAS o texto melhorado, sem comentários adicionais: "${text}"`,
@@ -129,9 +137,14 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
         } else if (type === 'reminder') {
           setDescription(improvedText);
         }
+      } else {
+        throw new Error("A IA não retornou um texto válido.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao profissionalizar texto:", error);
+      setAiError(error.message || "Ocorreu um erro ao processar o texto com IA.");
+      // Clear error after 5 seconds
+      setTimeout(() => setAiError(null), 5000);
     } finally {
       setIsProfessionalizing(null);
     }
@@ -1020,6 +1033,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
                   {viewMode === 'LIST' ? (editingIssueId ? 'Editar Pendência' : 'Registrar Pendência na Lista') : 'Novo Registro na Sua Agenda'}
               </h3>
+              {aiError && (
+                <div className="bg-red-50 text-red-600 text-[10px] px-3 py-1 rounded-full animate-bounce">
+                  {aiError}
+                </div>
+              )}
             </div>
           
           {viewMode === 'LIST' ? (
