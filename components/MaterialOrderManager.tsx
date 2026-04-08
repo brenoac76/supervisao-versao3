@@ -73,37 +73,15 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
 
   const analyzeLabelExhaustive = async (base64Data: string) => {
     try {
-        const response = await fetch("/api/ai/analyze-label", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            image: base64Data,
-            prompt: "Aja como um scanner industrial de precisão. Extraia ABSOLUTAMENTE TODOS os dados técnicos desta etiqueta de móveis Todeschini. Procure especificamente por: CLIENTE, OC COMPRA, MJF, PEDIDO, CÓDIGO DO ITEM, DESCRIÇÃO DA PEÇA, VOL, PC, LINHA, COR, PADRÃO, CÓDIGO DE IDENTIFICAÇÃO. Retorne EXCLUSIVAMENTE um array JSON puro: [ { \"label\": \"NOME DO CAMPO\", \"value\": \"VALOR\" } ]. Não inclua explicações ou blocos de código markdown como ```json."
-          }),
-        });
-
-        const contentType = response.headers.get("content-type");
-        if (!response.ok) {
-          if (contentType && contentType.includes("application/json")) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Erro ao processar imagem com IA.");
-          } else {
-            const errorText = await response.text();
-            console.error("Erro do servidor (não-JSON):", errorText.substring(0, 200));
-            throw new Error(`Erro do servidor (${response.status}).`);
-          }
-        }
-
-        if (!contentType || !contentType.includes("application/json")) {
-          throw new Error("O servidor retornou um formato inválido (não-JSON).");
-        }
-
-        const data = await response.json();
-        let rawText = data.text || '[]';
-        // SANITIZAÇÃO VITAL PARA O DEPLOY
-        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const { analyzeLabel } = await import('../src/services/geminiService');
+        const prompt = "Aja como um scanner industrial de precisão. Extraia ABSOLUTAMENTE TODOS os dados técnicos desta etiqueta de móveis Todeschini. Procure especificamente por: CLIENTE, OC COMPRA, MJF, PEDIDO, CÓDIGO DO ITEM, DESCRIÇÃO DA PEÇA, VOL, PC, LINHA, COR, PADRÃO, CÓDIGO DE IDENTIFICAÇÃO. Retorne EXCLUSIVAMENTE um array JSON puro: [ { \"label\": \"NOME DO CAMPO\", \"value\": \"VALOR\" } ]. Não inclua explicações ou blocos de código markdown como ```json.";
         
-        return JSON.parse(rawText);
+        const rawText = await analyzeLabel(base64Data, prompt);
+        
+        // SANITIZAÇÃO VITAL PARA O DEPLOY
+        const sanitizedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        return JSON.parse(sanitizedText);
     } catch (e) {
         console.error("Falha Crítica no Scanner IA:", e);
         return null;
