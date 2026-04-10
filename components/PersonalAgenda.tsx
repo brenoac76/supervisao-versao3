@@ -291,19 +291,22 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   };
 
   const handleEditIssue = (issue: AgendaIssue) => {
-      setEditingIssueId(issue.id);
-      setIssueClient(issue.clientName);
-      setIssueDate(issue.date);
+      // Encontra a issue original para não perder os tópicos que foram filtrados na view atual
+      const originalIssue = agendaIssues.find(i => i.id === issue.id) || issue;
+      
+      setEditingIssueId(originalIssue.id);
+      setIssueClient(originalIssue.clientName);
+      setIssueDate(originalIssue.date);
       
       // Robust normalization for editing
-      const topics = issue.topics && issue.topics.length > 0 
-        ? issue.topics.map(t => ({ ...t, date: t.date || issue.date, isAsteca: !!t.isAsteca })) 
+      const topics = originalIssue.topics && originalIssue.topics.length > 0 
+        ? originalIssue.topics.map(t => ({ ...t, date: t.date || originalIssue.date, isAsteca: !!t.isAsteca })) 
         : [{ 
-            id: issue.id, 
-            description: (issue as any).description || '', 
-            media: (issue as any).media || [], 
-            status: (issue as any).status || 'Pending', 
-            date: issue.date,
+            id: originalIssue.id, 
+            description: (originalIssue as any).description || '', 
+            media: (originalIssue as any).media || [], 
+            status: (originalIssue as any).status || 'Pending', 
+            date: originalIssue.date,
             isAsteca: false
           }];
           
