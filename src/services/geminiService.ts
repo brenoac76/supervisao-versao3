@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 
 // A chave GEMINI_API_KEY é injetada automaticamente no ambiente do frontend pelo AI Studio.
 // O SDK espera que ela esteja disponível em process.env.GEMINI_API_KEY.
-const apiKey = (process.env as any).GEMINI_API_KEY || "";
+const apiKey = process.env.GEMINI_API_KEY || "";
 let ai: GoogleGenAI | null = null;
 
 if (apiKey && apiKey.length > 10) {
@@ -33,6 +33,9 @@ export const professionalizeText = async (text: string): Promise<string> => {
   });
   
   if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error("Rota da API não encontrada (404). Se você está no link externo, por favor, publique (Deploy) o app novamente para atualizar o servidor.");
+    }
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || `Falha no servidor (${res.status})`);
   }
@@ -76,6 +79,9 @@ export const analyzeLabel = async (base64Image: string, customPrompt?: string): 
   });
   
   if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error("Rota da API não encontrada (404). Se você está no link externo, por favor, publique (Deploy) o app novamente para atualizar o servidor.");
+    }
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || `Falha no servidor (${res.status})`);
   }
