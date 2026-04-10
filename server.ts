@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
+import { VertexAI } from "@google-cloud/vertexai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,57 @@ async function startServer() {
   // Health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
+
+  // Helper para chamar a IA via Vertex AI (Fallback sem API Key)
+  const callVertexAI = async (prompt: string, image?: { mimeType: string, data: string }) => {
+    const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.PROJECT_ID || process.env.GCP_PROJECT;
+    const location = process.env.GOOGLE_CLOUD_REGION || process.env.REGION || 'us-central1';
+
+    if (!project) {
+      throw new Error("Projeto Google Cloud não detectado. O Vertex AI requer um ambiente Cloud Run ou variável de projeto.");
+    }
+
+    console.log(`[AI] Tentando via Vertex AI (Identity-based) no projeto: ${project}`);
+    const vertexAI = new VertexAI({ project, location });
+    const model = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const parts: any[] = image 
+      ? [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.data } }]
+      : [{ text: prompt }];
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts }]
+    });
+
+    const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("Resposta vazia do Vertex AI");
+    return text;
+  };
+
+  // API para Profissionalizar Texto (Fallback)
+  app.post("/api/ai/professionalize", async (req, res) => {
+    try {
+      const { text } = req.body;
+      const prompt = `Melhore o seguinte texto para torná-lo mais profissional, claro e conciso, mantendo o sentido original. O texto é uma observação técnica ou lembrete de uma agenda de montagem de móveis:\n\n"${text}"`;
+      const improvedText = await callVertexAI(prompt);
+      res.json({ text: improvedText });
+    } catch (error: any) {
+      console.error("Vertex AI Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API para Analisar Etiquetas (Fallback)
+  app.post("/api/ai/analyze-label", async (req, res) => {
+    try {
+      const { image, prompt } = req.body;
+      const resultText = await callVertexAI(prompt, { mimeType: "image/jpeg", data: image });
+      res.json({ text: resultText });
+    } catch (error: any) {
+      console.error("Vertex AI Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Configuração do Vite / Estáticos
