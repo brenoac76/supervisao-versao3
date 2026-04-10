@@ -109,7 +109,7 @@ function serveStatic(app: any) {
   app.use(express.static(distPath));
   
   // Fallback para SPA (deve ser a ÚLTIMA rota)
-  app.all('*', (req: any, res: any) => {
+  app.all('*all', (req: any, res: any) => {
     // Se for uma rota de API que não foi capturada acima
     if (req.path.startsWith('/api')) {
       console.warn(`[404] API não encontrada: ${req.method} ${req.path}`);
