@@ -1361,11 +1361,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                         {expandedClient === summary.name && (
                                             <tr>
                                                 <td colSpan={4} className="p-0 bg-slate-50/50">
-                                                    <div className="p-4 space-y-3 animate-slideDown">
+                                                    <div className="p-4 space-y-3 animate-slideDown max-h-[70vh] overflow-y-auto overscroll-contain no-scrollbar">
                                                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
                                                             {summary.issues.map((issue) => (
                                                                 <div key={issue.id} className="divide-y divide-slate-50">
-                                                                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-[90px] z-10 shadow-sm">
+                                                                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-0 z-10 shadow-sm">
                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase">
                                                                             Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
                                                                         </span>
