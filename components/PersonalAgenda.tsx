@@ -107,7 +107,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
   // Media Viewer State
   const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number; topicId?: string; issue?: AgendaIssue } | null>(null);
-  const [viewingClientItems, setViewingClientItems] = useState<typeof clientSummaries[0] | null>(null);
+  const [viewingClientName, setViewingClientName] = useState<string | null>(null);
   const [isProfessionalizing, setIsProfessionalizing] = useState<string | null>(null); // topicId or 'reminder'
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -185,14 +185,6 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       return days < 0 ? 0 : days;
   };
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (viewingClientItems && scrollContainerRef.current) {
-      // No longer need to scroll to row since it's a modal
-    }
-  }, [viewingClientItems]);
-
   const clientSummaries = useMemo(() => {
     const groups: Record<string, AgendaIssue[]> = {};
     agendaIssues.forEach(issue => {
@@ -244,6 +236,19 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
     }).filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => b.daysOpen - a.daysOpen);
   }, [agendaIssues, filter]);
+
+  const viewingClientItems = useMemo(() => {
+    if (!viewingClientName) return null;
+    return clientSummaries.find(s => s.name === viewingClientName) || null;
+  }, [viewingClientName, clientSummaries]);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (viewingClientItems && scrollContainerRef.current) {
+      // No longer need to scroll to row since it's a modal
+    }
+  }, [viewingClientItems]);
 
   const handleAddReminder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,18 +334,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   };
 
   const handleDeleteTopic = (issueId: string, topicId: string) => {
-    if (window.confirm("Deseja excluir este item da pendência?")) {
-      const updatedIssues = agendaIssues.map(issue => {
-        if (issue.id === issueId) {
-          return {
-            ...issue,
-            topics: issue.topics.filter(t => t.id !== topicId)
-          };
-        }
-        return issue;
-      }).filter(issue => issue.topics.length > 0);
-      onUpdateAgendaIssues(updatedIssues);
-    }
+    const updatedIssues = agendaIssues.map(issue => {
+      if (issue.id === issueId) {
+        return {
+          ...issue,
+          topics: issue.topics.filter(t => t.id !== topicId)
+        };
+      }
+      return issue;
+    }).filter(issue => issue.topics.length > 0);
+    onUpdateAgendaIssues(updatedIssues);
   };
 
   const handleSaveSingleTopic = (e: React.FormEvent) => {
@@ -430,15 +433,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   };
 
   const deleteItem = (id: string) => {
-    if (window.confirm("Deseja excluir permanentemente este lembrete da sua agenda?")) {
-      onUpdateAgenda(agenda.filter(i => i.id !== id));
-    }
+    onUpdateAgenda(agenda.filter(i => i.id !== id));
   };
 
   const deleteIssue = (id: string) => {
-    if (window.confirm("Excluir esta pendência?")) {
-      onUpdateAgendaIssues(agendaIssues.filter(i => i.id !== id));
-    }
+    onUpdateAgendaIssues(agendaIssues.filter(i => i.id !== id));
   };
 
   const handleGeneratePDF = () => {
@@ -1070,262 +1069,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                   </button>
                 </div>
             </div>
-        )}
-      </div>
-
-      {/* Scrollable Content Area */}
+          )}
+        </div>
+        {/* Scrollable Content Area */}
       <div 
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto no-scrollbar px-0.5 pt-4 pb-20"
       >
         <div className="space-y-6">
           {/* Forms Section */}
-      {isAdding && (
-        <Modal onClose={() => setIsAdding(false)}>
-          <div className="animate-fadeIn">
-            <div className="flex justify-between items-center mb-6 pr-8 sm:pr-0">
-              <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
-                  {viewMode === 'LIST' ? (editingIssueId ? 'Editar Pendência' : 'Registrar Pendência na Lista') : 'Novo Registro na Sua Agenda'}
-              </h3>
-              {aiError && (
-                <div className="bg-red-50 text-red-600 text-[10px] px-3 py-1 rounded-full animate-bounce">
-                  {aiError}
-                </div>
-              )}
-            </div>
-          
-          {viewMode === 'LIST' ? (
-              <form onSubmit={handleAddIssue} className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                        <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Nome do Cliente</label>
-                        <input required value={issueClient} onChange={e => setIssueClient(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" placeholder="Ex: João da Silva..." />
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Data da Pendência</label>
-                        <input required type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" />
-                    </div>
-                    
-                    <div className="md:col-span-2 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <label className="block text-[10px] font-normal text-slate-500 uppercase tracking-wider">Tópicos da Pendência</label>
-                        </div>
-                        
-                        <div className="space-y-4">
-                            {formTopics.map((topic, index) => (
-                                <div key={topic.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 relative">
-                                    {formTopics.length > 1 && (
-                                        <button 
-                                            type="button" 
-                                            onClick={() => setFormTopics(formTopics.filter(t => t.id !== topic.id))}
-                                            className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    <div className="flex flex-col sm:flex-row gap-3">
-                                        <div className="flex gap-3 flex-grow">
-                                            <span className="text-slate-400 font-bold text-sm mt-2">{index + 1}.</span>
-                                            <div className="relative flex-grow">
-                                                <textarea 
-                                                    required 
-                                                    value={topic.description} 
-                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, description: e.target.value } : t))}
-                                                    className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
-                                                    placeholder="Descreva o item da pendência..." 
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleProfessionalizeText(topic.description, 'topic', topic.id)}
-                                                    disabled={isProfessionalizing === topic.id}
-                                                    className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
-                                                        isProfessionalizing === topic.id 
-                                                        ? 'bg-slate-100 text-slate-400' 
-                                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                                    }`}
-                                                    title="Melhorar com IA"
-                                                >
-                                                    <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === topic.id ? 'animate-pulse' : ''}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="sm:w-40 space-y-2">
-                                            <div>
-                                                <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
-                                                <input 
-                                                    type="date" 
-                                                    required 
-                                                    value={topic.date} 
-                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, date: e.target.value } : t))}
-                                                    className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
-                                                />
-                                            </div>
-                                            <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={!!topic.isAsteca} 
-                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, isAsteca: e.target.checked } : t))}
-                                                    className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                                                />
-                                                <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${topic.isAsteca ? 'text-red-600' : 'text-slate-400 group-hover:text-slate-600'}`}>ASTECA</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex flex-wrap gap-2 pl-7">
-                                        {topic.media.map(m => (
-                                            <div key={m.id} className="relative w-16 h-16 group">
-                                                <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover rounded-lg border border-slate-200" />
-                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => setEditingMedia({ media: m, topicId: topic.id })}
-                                                        className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-blue-600 shadow-lg"
-                                                        title="Editar Foto"
-                                                    >
-                                                        <PencilIcon className="w-3 h-3" />
-                                                    </button>
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, media: t.media.filter(x => x.id !== m.id) } : t))} 
-                                                        className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 shadow-lg"
-                                                        title="Excluir"
-                                                    >
-                                                        &times;
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        <label className={`w-16 h-16 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors ${uploadingTopicId === topic.id ? 'opacity-50' : ''}`}>
-                                            <CameraIcon className="w-5 h-5 text-slate-400" />
-                                            <span className="text-[7px] font-normal text-slate-400 uppercase mt-1">Anexar</span>
-                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, topic.id)} disabled={!!uploadingTopicId} />
-                                        </label>
-                                    </div>
-                                </div>
-                            ))}
-
-                            <button 
-                                type="button" 
-                                onClick={() => setFormTopics([...formTopics, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }])}
-                                className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold uppercase text-[10px] hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
-                            >
-                                <PlusCircleIcon className="w-4 h-4" /> Adicionar Tópico
-                            </button>
-                        </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-3 pt-2">
-                    <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
-                    <button type="submit" className="px-6 sm:px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
-                        {editingIssueId ? 'Atualizar Pendência' : 'Salvar Pendência na Lista'}
-                    </button>
-                  </div>
-              </form>
-          ) : (
-              <form onSubmit={handleAddReminder} className="space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">O que você precisa lembrar?</label>
-                    <input required value={title} onChange={e => setTitle(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" placeholder="Título do compromisso..." />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Data e Hora do Lembrete</label>
-                    <input required type="datetime-local" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Descrição Detalhada (Opcional)</label>
-                    <div className="relative">
-                        <textarea 
-                            value={description} 
-                            onChange={e => setDescription(e.target.value)} 
-                            className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-28 resize-none bg-slate-50 focus:bg-white transition-all" 
-                            placeholder="Mais detalhes sobre esta tarefa..." 
-                        />
-                        <button
-                            type="button"
-                            onClick={() => handleProfessionalizeText(description, 'reminder')}
-                            disabled={isProfessionalizing === 'reminder'}
-                            className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
-                                isProfessionalizing === 'reminder' 
-                                ? 'bg-slate-100 text-slate-400' 
-                                : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                            }`}
-                            title="Melhorar com IA"
-                        >
-                            <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === 'reminder' ? 'animate-pulse' : ''}`} />
-                        </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
-                  <button type="submit" className="px-6 sm:px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">Salvar na Agenda</button>
-                </div>
-              </form>
-          )}
-          </div>
-        </Modal>
-      )}
-
-      {editingMedia && (
-        <PhotoEditor 
-          media={editingMedia.media}
-          onClose={() => setEditingMedia(null)}
-          onSave={async (updatedMedia) => {
-            let finalMedia = updatedMedia;
-            
-            // If the URL is a data URL (edited image), upload it to Drive to ensure persistence
-            if (updatedMedia.url.startsWith('data:')) {
-              try {
-                setUploadingTopicId(editingMedia.topicId);
-                const base64Data = updatedMedia.url;
-                const response = await fetchWithRetry(SCRIPT_URL, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                  body: JSON.stringify({ 
-                    action: 'UPLOAD_FILE', 
-                    data: { 
-                      base64Data, 
-                      fileName: `edited_${updatedMedia.name || 'photo.jpg'}`, 
-                      mimeType: 'image/jpeg' 
-                    } 
-                  }),
-                });
-                const result = await response.json();
-                if (result.success && result.url) {
-                  finalMedia = { ...updatedMedia, url: result.url };
-                }
-              } catch (error) {
-                console.error("Erro ao salvar foto editada na nuvem:", error);
-                alert("A foto foi editada localmente, mas houve um erro ao salvar na nuvem. Ela pode não persistir ao recarregar.");
-              } finally {
-                setUploadingTopicId(null);
-              }
-            }
-
-            const updatedTopics = formTopics.map(t => 
-              t.id === editingMedia.topicId 
-                ? { ...t, media: t.media.map(m => m.id === finalMedia.id ? finalMedia : m) }
-                : t
-            );
-
-            setFormTopics(updatedTopics);
-
-            // Se estiver editando uma pendência já existente, salva imediatamente no banco
-            if (editingIssueId) {
-                const updatedIssues = agendaIssues.map(issue => 
-                    issue.id === editingIssueId 
-                    ? { ...issue, topics: updatedTopics, clientName: issueClient.trim(), date: issueDate }
-                    : issue
-                );
-                onUpdateAgendaIssues(updatedIssues);
-            }
-
-            setEditingMedia(null);
-          }}
-        />
-      )}
+          {/* isAdding modal moved to the end for better layering */}
 
       {/* List Content */}
       <div className="space-y-4">
@@ -1349,7 +1102,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                     <React.Fragment key={summary.name}>
                                         <tr 
                                             id={`client-row-${summary.name}`}
-                                            onClick={() => setViewingClientItems(summary)}
+                                            onClick={() => setViewingClientName(summary.name)}
                                             className="cursor-pointer hover:bg-slate-50 transition-colors bg-white"
                                         >
                                             <td className="p-4 text-slate-500 font-medium">
@@ -1435,6 +1188,9 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             </div>
         )}
       </div>
+    </div>
+  </div>
+
 
       {/* Media Viewer Modal */}
       {editingTopic && (
@@ -1561,17 +1317,17 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
       {/* Client Items Modal */}
       {viewingClientItems && (
-        <Modal onClose={() => setViewingClientItems(null)}>
-          <div className="animate-fadeIn flex flex-col h-[80vh]">
-            <div className="flex justify-between items-center mb-4 pr-8 sm:pr-0">
+        <Modal onClose={() => setViewingClientName(null)} noScroll={true}>
+          <div className="flex flex-col h-[80vh] overflow-hidden">
+            <div className="flex justify-between items-center p-4 sm:p-6 pb-4 pr-10 sm:pr-6 flex-shrink-0">
               <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
                 Pendências: <span className="font-bold">{viewingClientItems.name}</span>
               </h3>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
+            <div className="mx-4 sm:mx-6 mb-4 sm:mb-6 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden relative">
               {/* Fixed Header within Modal */}
-              <div className="bg-slate-900 shadow-sm sticky top-0 z-20">
+              <div className="bg-slate-900 shadow-md z-50 flex-shrink-0 relative">
                 <div className="flex text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
                   <div className="p-3 sm:p-4 w-24 sm:w-32">Data</div>
                   <div className="p-3 sm:p-4 flex-1">Cliente</div>
@@ -1581,32 +1337,42 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               </div>
 
               {/* Scrollable Body */}
-              <div className="flex-1 overflow-y-auto scrollbar-custom p-4 space-y-4 bg-slate-50/50">
-                {viewingClientItems.issues.map((issue) => (
-                  <div key={issue.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
-                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">
-                        Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
-                      </span>
-                      <div className="flex gap-3">
-                        <button 
-                          onClick={() => {
-                            handleEditIssue(issue);
-                            setFormTopics(prev => [...prev, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }]);
-                          }} 
-                          className="flex items-center gap-1 text-green-600 hover:text-green-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
-                        >
-                          <PlusCircleIcon className="w-3 h-3" /> Adicionar
-                        </button>
-                        <button onClick={() => handleEditIssue(issue)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
-                          <PencilIcon className="w-3 h-3" /> Editar
-                        </button>
-                        <button onClick={() => deleteIssue(issue.id)} className="flex items-center gap-1 text-red-600 hover:text-red-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
-                          <TrashIcon className="w-3 h-3" /> Excluir
-                        </button>
+              <div className="flex-1 overflow-y-auto scrollbar-custom bg-slate-50/50 min-h-0 z-10">
+                <div className="p-4 space-y-4">
+                  {viewingClientItems.issues.map((issue) => (
+                    <div key={issue.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
+                      <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-0 z-20 shadow-sm border-b border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">
+                          Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                        </span>
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => {
+                              handleEditIssue(issue);
+                              setFormTopics(prev => [...prev, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }]);
+                            }} 
+                            className="flex items-center gap-1 text-green-600 hover:text-green-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
+                          >
+                            <PlusCircleIcon className="w-3 h-3" /> Adicionar
+                          </button>
+                          <button onClick={() => handleEditIssue(issue)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
+                            <PencilIcon className="w-3 h-3" /> Editar
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('Deseja realmente excluir esta pendência e todos os seus tópicos?')) {
+                                deleteIssue(issue.id);
+                              }
+                            }} 
+                            className="flex items-center gap-1 text-red-600 hover:text-red-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
+                          >
+                            <TrashIcon className="w-3 h-3" /> Excluir
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    {issue.topics.map((topic, idx) => {
+                      <div className="divide-y divide-slate-50">
+                        {issue.topics.map((topic, idx) => {
                       const topicDays = calculateDaysFromDate(topic.date || issue.date);
                       return (
                         <div 
@@ -1666,12 +1432,14 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                       );
                     })}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
-        </Modal>
-      )}
+        </div>
+      </div>
+    </Modal>
+  )}
 
       {/* Topic Detail Modal */}
       {viewingTopicDetail && (
@@ -1702,8 +1470,10 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 </button>
                 <button 
                   onClick={() => {
-                    handleDeleteTopic(viewingTopicDetail.issueId, viewingTopicDetail.topic.id);
-                    setViewingTopicDetail(null);
+                    if (confirm('Deseja realmente excluir este item da pendência?')) {
+                      handleDeleteTopic(viewingTopicDetail.issueId, viewingTopicDetail.topic.id);
+                      setViewingTopicDetail(null);
+                    }
                   }}
                   className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
                   title="Excluir"
@@ -1799,8 +1569,378 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               </div>
           </Modal>
       )}
-      </div>
-      </div>
+
+      {/* Edit Photo Modal */}
+      {editingMedia && (
+        <PhotoEditor 
+          media={editingMedia.media}
+          onClose={() => setEditingMedia(null)}
+          onSave={async (updatedMedia) => {
+            let finalMedia = updatedMedia;
+            
+            // If the URL is a data URL (edited image), upload it to Drive to ensure persistence
+            if (updatedMedia.url.startsWith('data:')) {
+              try {
+                setUploadingTopicId(editingMedia.topicId);
+                const base64Data = updatedMedia.url;
+                const response = await fetchWithRetry(SCRIPT_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  body: JSON.stringify({ 
+                    action: 'UPLOAD_FILE', 
+                    data: { 
+                      base64Data, 
+                      fileName: `edited_${updatedMedia.name || 'photo.jpg'}`, 
+                      mimeType: 'image/jpeg' 
+                    } 
+                  }),
+                });
+                const result = await response.json();
+                if (result.success && result.url) {
+                  finalMedia = { ...updatedMedia, url: result.url };
+                }
+              } catch (error) {
+                console.error("Erro ao salvar foto editada na nuvem:", error);
+                alert("A foto foi editada localmente, mas houve um erro ao salvar na nuvem. Ela pode não persistir ao recarregar.");
+              } finally {
+                setUploadingTopicId(null);
+              }
+            }
+
+            const updatedTopics = formTopics.map(t => 
+              t.id === editingMedia.topicId 
+                ? { ...t, media: t.media.map(m => m.id === finalMedia.id ? finalMedia : m) }
+                : t
+            );
+
+            setFormTopics(updatedTopics);
+
+            // Se estiver editando uma pendência já existente, salva imediatamente no banco
+            if (editingIssueId) {
+                const updatedIssues = agendaIssues.map(issue => 
+                    issue.id === editingIssueId 
+                    ? { ...issue, topics: updatedTopics, clientName: issueClient.trim(), date: issueDate }
+                    : issue
+                );
+                onUpdateAgendaIssues(updatedIssues);
+            }
+
+            setEditingMedia(null);
+          }}
+        />
+      )}
+
+      {/* Edit Topic Modal */}
+      {editingTopic && (
+        <Modal onClose={() => setEditingTopic(null)}>
+          <div className="animate-fadeIn">
+            <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest mb-6 pr-8 sm:pr-0">Editar Item da Pendência</h3>
+            <form onSubmit={handleSaveSingleTopic} className="space-y-5">
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex flex-col gap-3">
+                    <div className="relative flex-grow">
+                      <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Descrição</label>
+                      <textarea 
+                        required 
+                        value={editingTopic.topic.description} 
+                        onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, description: e.target.value } })}
+                        className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-32 resize-none bg-white transition-all" 
+                        placeholder="Descreva o item da pendência..." 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleProfessionalizeText(editingTopic.topic.description, 'topic', editingTopic.topic.id)}
+                        disabled={isProfessionalizing === editingTopic.topic.id}
+                        className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                          isProfessionalizing === editingTopic.topic.id 
+                          ? 'bg-slate-100 text-slate-400' 
+                          : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                        title="Melhorar com IA"
+                      >
+                        <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === editingTopic.topic.id ? 'animate-pulse' : ''}`} />
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
+                        <input 
+                          type="date" 
+                          required 
+                          value={editingTopic.topic.date} 
+                          onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, date: e.target.value } })}
+                          className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <label className="flex items-center gap-2 cursor-pointer group mt-4">
+                          <input 
+                            type="checkbox" 
+                            checked={!!editingTopic.topic.isAsteca} 
+                            onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, isAsteca: e.target.checked } })}
+                            className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                          />
+                          <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${editingTopic.topic.isAsteca ? 'text-red-600' : 'text-slate-400 group-hover:text-slate-600'}`}>ASTECA</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {editingTopic.topic.media.map(m => (
+                      <div key={m.id} className="relative w-20 h-20 group">
+                        <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover rounded-lg border border-slate-200" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                          <button 
+                            type="button" 
+                            onClick={() => setEditingMedia({ media: m, topicId: editingTopic.topic.id })}
+                            className="bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-blue-600 shadow-lg"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, media: editingTopic.topic.media.filter(x => x.id !== m.id) } })} 
+                            className="bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-red-600 shadow-lg"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <label className={`w-20 h-20 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors ${uploadingTopicId === editingTopic.topic.id ? 'opacity-50' : ''}`}>
+                      <CameraIcon className="w-6 h-6 text-slate-400" />
+                      <span className="text-[8px] font-normal text-slate-400 uppercase mt-1">Anexar</span>
+                      <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingTopicId(editingTopic.topic.id);
+                        const tempId = generateUUID();
+                        const localUrl = URL.createObjectURL(file);
+                        const tempMedia: Media = { id: tempId, type: 'image', url: localUrl, name: file.name };
+                        setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: [...prev.topic.media, tempMedia] } } : null);
+                        try {
+                          const { base64: base64Data, mimeType } = await compressImage(file);
+                          const response = await fetchWithRetry(SCRIPT_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
+                          });
+                          const result = await response.json();
+                          if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+                          setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: prev.topic.media.map(m => m.id === tempId ? { ...m, url: result.url, originalUrl: result.url } : m) } } : null);
+                        } catch (error: any) {
+                          alert(`Erro no upload: ${error.message}`);
+                          setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: prev.topic.media.filter(m => m.id !== tempId) } } : null);
+                        } finally {
+                          setUploadingTopicId(null);
+                        }
+                      }} disabled={!!uploadingTopicId} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setEditingTopic(null)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add/Edit Modal - Moved to the end for top-most layering */}
+      {isAdding && (
+        <Modal onClose={() => setIsAdding(false)}>
+          <div className="animate-fadeIn">
+            <div className="flex justify-between items-center mb-6 pr-8 sm:pr-0">
+              <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
+                  {viewMode === 'LIST' ? (editingIssueId ? 'Editar Pendência' : 'Registrar Pendência na Lista') : 'Novo Registro na Sua Agenda'}
+              </h3>
+              {aiError && (
+                <div className="bg-red-50 text-red-600 text-[10px] px-3 py-1 rounded-full animate-bounce">
+                  {aiError}
+                </div>
+              )}
+            </div>
+          
+          {viewMode === 'LIST' ? (
+              <form onSubmit={handleAddIssue} className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Nome do Cliente</label>
+                        <input required value={issueClient} onChange={e => setIssueClient(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" placeholder="Ex: João da Silva..." />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Data da Pendência</label>
+                        <input required type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" />
+                    </div>
+                    
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <label className="block text-[10px] font-normal text-slate-500 uppercase tracking-wider">Tópicos da Pendência</label>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {formTopics.map((topic, index) => (
+                                <div key={topic.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 relative">
+                                    {formTopics.length > 1 && (
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setFormTopics(formTopics.filter(t => t.id !== topic.id))}
+                                            className="absolute top-2 right-2 text-slate-400 hover:text-red-500"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <div className="flex gap-3 flex-grow">
+                                            <span className="text-slate-400 font-bold text-sm mt-2">{index + 1}.</span>
+                                            <div className="relative flex-grow">
+                                                <textarea 
+                                                    required 
+                                                    value={topic.description} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, description: e.target.value } : t))}
+                                                    className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
+                                                    placeholder="Descreva o item da pendência..." 
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleProfessionalizeText(topic.description, 'topic', topic.id)}
+                                                    disabled={isProfessionalizing === topic.id}
+                                                    className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                                                        isProfessionalizing === topic.id 
+                                                        ? 'bg-slate-100 text-slate-400' 
+                                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                                    }`}
+                                                    title="Melhorar com IA"
+                                                >
+                                                    <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === topic.id ? 'animate-pulse' : ''}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="sm:w-40 space-y-2">
+                                            <div>
+                                                <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
+                                                <input 
+                                                    type="date" 
+                                                    required 
+                                                    value={topic.date} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, date: e.target.value } : t))}
+                                                    className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
+                                                />
+                                            </div>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!topic.isAsteca} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, isAsteca: e.target.checked } : t))}
+                                                    className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                />
+                                                <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${topic.isAsteca ? 'text-red-600' : 'text-slate-400 group-hover:text-slate-600'}`}>ASTECA</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-2 pl-7">
+                                        {topic.media.map(m => (
+                                            <div key={m.id} className="relative w-16 h-16 group">
+                                                <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover rounded-lg border border-slate-200" referrerPolicy="no-referrer" />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setEditingMedia({ media: m, topicId: topic.id })}
+                                                        className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-blue-600 shadow-lg"
+                                                        title="Editar Foto"
+                                                    >
+                                                        <PencilIcon className="w-3 h-3" />
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, media: t.media.filter(x => x.id !== m.id) } : t))} 
+                                                        className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 shadow-lg"
+                                                        title="Excluir"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <label className={`w-16 h-16 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors ${uploadingTopicId === topic.id ? 'opacity-50' : ''}`}>
+                                            <CameraIcon className="w-5 h-5 text-slate-400" />
+                                            <span className="text-[7px] font-normal text-slate-400 uppercase mt-1">Anexar</span>
+                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, topic.id)} disabled={!!uploadingTopicId} />
+                                        </label>
+                                    </div>
+                                </div>
+                            ))}
+
+                            <button 
+                                type="button" 
+                                onClick={() => setFormTopics([...formTopics, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }])}
+                                className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold uppercase text-[10px] hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <PlusCircleIcon className="w-4 h-4" /> Adicionar Tópico
+                            </button>
+                        </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
+                    <button type="submit" className="px-6 sm:px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
+                        {editingIssueId ? 'Atualizar Pendência' : 'Salvar Pendência na Lista'}
+                    </button>
+                  </div>
+              </form>
+          ) : (
+              <form onSubmit={handleAddReminder} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">O que você precisa lembrar?</label>
+                    <input required value={title} onChange={e => setTitle(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" placeholder="Título do compromisso..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Data e Hora do Lembrete</label>
+                    <input required type="datetime-local" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-slate-50 focus:bg-white transition-all" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Descrição Detalhada (Opcional)</label>
+                    <div className="relative">
+                        <textarea 
+                            value={description} 
+                            onChange={e => setDescription(e.target.value)} 
+                            className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-28 resize-none bg-slate-50 focus:bg-white transition-all" 
+                            placeholder="Mais detalhes sobre esta tarefa..." 
+                        />
+                        <button
+                            type="button"
+                            onClick={() => handleProfessionalizeText(description, 'reminder')}
+                            disabled={isProfessionalizing === 'reminder'}
+                            className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                                isProfessionalizing === 'reminder' 
+                                ? 'bg-slate-100 text-slate-400' 
+                                : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                            }`}
+                            title="Melhorar com IA"
+                        >
+                            <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === 'reminder' ? 'animate-pulse' : ''}`} />
+                        </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
+                  <button type="submit" className="px-6 sm:px-10 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">Salvar Lembrete</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
