@@ -110,6 +110,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   const [viewingClientName, setViewingClientName] = useState<string | null>(null);
   const [isProfessionalizing, setIsProfessionalizing] = useState<string | null>(null); // topicId or 'reminder'
   const [aiError, setAiError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'issue' | 'topic', issueId: string, topicId?: string, message: string } | null>(null);
 
   const handleProfessionalizeText = async (text: string, type: 'topic' | 'reminder', id?: string) => {
     if (!text.trim()) return;
@@ -1361,9 +1362,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm('Deseja realmente excluir esta pendência e todos os seus tópicos?')) {
-                                deleteIssue(issue.id);
-                              }
+                              setConfirmDelete({
+                                type: 'issue',
+                                issueId: issue.id,
+                                message: 'Deseja realmente excluir esta pendência e todos os seus tópicos?'
+                              });
                             }} 
                             className="flex items-center gap-1 text-red-600 hover:text-red-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
                           >
@@ -1470,10 +1473,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 </button>
                 <button 
                   onClick={() => {
-                    if (confirm('Deseja realmente excluir este item da pendência?')) {
-                      handleDeleteTopic(viewingTopicDetail.issueId, viewingTopicDetail.topic.id);
-                      setViewingTopicDetail(null);
-                    }
+                    setConfirmDelete({
+                      type: 'topic',
+                      issueId: viewingTopicDetail.issueId,
+                      topicId: viewingTopicDetail.topic.id,
+                      message: 'Deseja realmente excluir este item da pendência?'
+                    });
                   }}
                   className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
                   title="Excluir"
@@ -1941,6 +1946,38 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           </div>
         </Modal>
       )}
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <Modal onClose={() => setConfirmDelete(null)}>
+          <div className="animate-fadeIn space-y-6">
+            <h3 className="font-bold text-slate-800 uppercase text-sm tracking-widest mb-1">Confirmar Exclusão</h3>
+            <p className="text-slate-600 text-sm">{confirmDelete.message}</p>
+            <div className="flex justify-end gap-3 pt-4">
+              <button 
+                onClick={() => setConfirmDelete(null)} 
+                className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  if (confirmDelete.type === 'issue') {
+                    deleteIssue(confirmDelete.issueId);
+                  } else if (confirmDelete.type === 'topic' && confirmDelete.topicId) {
+                    handleDeleteTopic(confirmDelete.issueId, confirmDelete.topicId);
+                    setViewingTopicDetail(null);
+                  }
+                  setConfirmDelete(null);
+                }} 
+                className="px-8 py-3 bg-red-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-red-700"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 };
