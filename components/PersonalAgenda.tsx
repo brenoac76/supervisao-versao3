@@ -963,105 +963,114 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn font-app max-w-5xl mx-auto font-normal">
-      {/* Header & Tabs */}
-      <div className="sticky top-0 z-40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-b-2xl sm:rounded-2xl border-b sm:border border-slate-200 shadow-sm -mx-4 sm:mx-0">
-        <div>
-          <h2 className="text-lg sm:text-xl font-normal text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-            <BellIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" /> Agenda de {user.username}
-          </h2>
-          <p className="text-[9px] sm:text-[10px] font-normal text-slate-400 uppercase tracking-widest">{viewMode === 'LIST' ? 'Lista Técnica de Pendências' : 'Compromissos Pessoais e Futuros'}</p>
-        </div>
-        
-        <div className="flex gap-2 w-full sm:w-auto">
-          <div className="flex bg-slate-100 p-1 rounded-xl flex-grow sm:flex-grow-0">
+    <div 
+      className="animate-fadeIn font-app max-w-5xl mx-auto font-normal overflow-x-hidden pb-20"
+      style={{ overscrollBehavior: 'none' }}
+    >
+      {/* Sticky Header & Filters Container */}
+      <div className="sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm -mx-4 px-4 sm:mx-0 sm:px-0 pt-2 sm:pt-4 pb-4 space-y-4 shadow-sm border-b border-slate-200">
+        {/* Header & Tabs */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <h2 className="text-lg sm:text-xl font-normal text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+              <BellIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" /> Agenda de {user.username}
+            </h2>
+            <p className="text-[9px] sm:text-[10px] font-normal text-slate-400 uppercase tracking-widest">{viewMode === 'LIST' ? 'Lista Técnica de Pendências' : 'Compromissos Pessoais e Futuros'}</p>
+          </div>
+          
+          <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex bg-slate-100 p-1 rounded-xl flex-grow sm:flex-grow-0">
+              <button 
+                onClick={() => setFilter('PENDING')}
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+              >
+                Pendentes
+              </button>
+              <button 
+                onClick={() => setFilter('ASTECA')}
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
+              >
+                ASTECAS
+              </button>
+              <button 
+                onClick={() => setFilter('DONE')}
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
+              >
+                Concluídos
+              </button>
+            </div>
             <button 
-              onClick={() => setFilter('PENDING')}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+              onClick={() => {
+                  setEditingIssueId(null);
+                  setIssueClient('');
+                  setIssueDate(getLocalYYYYMMDD());
+                  setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }]);
+                  setIsAdding(true);
+              }}
+              className="bg-blue-600 text-white p-2 sm:px-5 sm:py-2 rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+              title="Novo Registro"
             >
-              Pendentes
-            </button>
-            <button 
-              onClick={() => setFilter('ASTECA')}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              ASTECAS
-            </button>
-            <button 
-              onClick={() => setFilter('DONE')}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              Concluídos
+              <PlusCircleIcon className="w-5 h-5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Novo Registro</span>
             </button>
           </div>
-          <button 
-            onClick={() => {
-                setEditingIssueId(null);
-                setIssueClient('');
-                setIssueDate(getLocalYYYYMMDD());
-                setFormTopics([{ id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD() }]);
-                setIsAdding(true);
-            }}
-            className="bg-blue-600 text-white p-2 sm:px-5 sm:py-2 rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-md hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-            title="Novo Registro"
-          >
-            <PlusCircleIcon className="w-5 h-5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Novo Registro</span>
-          </button>
         </div>
+
+        {/* PDF Filters (Only for LIST view) */}
+        {viewMode === 'LIST' && !isAdding && (
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4 overflow-x-auto no-scrollbar">
+                <div className="flex-shrink-0">
+                    <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Início</label>
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
+                </div>
+                <div className="flex-shrink-0">
+                    <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Fim</label>
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
+                </div>
+                <div className="flex-shrink-0">
+                    <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Status</label>
+                    <select value={reportStatus} onChange={e => setReportStatus(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 min-w-[120px]">
+                        <option value="ALL">Todos</option>
+                        <option value="PENDING">Somente Pendentes</option>
+                        <option value="RESOLVED">Somente Resolvidos</option>
+                    </select>
+                </div>
+                <div className="flex-shrink-0">
+                    <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Cliente</label>
+                    <select value={reportClient} onChange={e => setReportClient(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 min-w-[150px] max-w-[200px]">
+                        <option value="">Todos os Clientes</option>
+                        {uniqueClients.map(client => (
+                            <option key={client} value={client}>{client}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button onClick={handleGeneratePDF} className="flex-1 sm:flex-none bg-slate-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-slate-700 flex items-center justify-center gap-2 h-[34px]">
+                      <PrinterIcon className="w-4 h-4" /> <span className="sm:hidden">PDF</span><span className="hidden sm:inline">Gerar Relatório PDF</span>
+                  </button>
+                  <button 
+                    onClick={handleGeneratePDFWithPhotos} 
+                    disabled={isGenerating}
+                    className="flex-1 sm:flex-none bg-blue-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center gap-2 h-[34px] disabled:opacity-50"
+                  >
+                      <PhotoIcon className="w-4 h-4" /> <span className="sm:hidden">Fotos</span><span className="hidden sm:inline">{isGenerating ? 'Gerando...' : 'Relatório com Fotos'}</span>
+                  </button>
+                  <button 
+                    onClick={handleGenerateAstecaPDF} 
+                    className="flex-1 sm:flex-none bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-red-700 flex items-center justify-center gap-2 h-[34px]"
+                  >
+                      <BellIcon className="w-4 h-4" /> <span className="sm:hidden">ASTECAS</span><span className="hidden sm:inline">Relatório ASTECAS</span>
+                  </button>
+                </div>
+            </div>
+        )}
       </div>
 
-      {/* PDF Filters (Only for LIST view) */}
-      {viewMode === 'LIST' && !isAdding && (
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4">
-              <div>
-                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Início</label>
-                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
-              </div>
-              <div>
-                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Fim</label>
-                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
-              </div>
-              <div>
-                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Status</label>
-                  <select value={reportStatus} onChange={e => setReportStatus(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 min-w-[120px]">
-                      <option value="ALL">Todos</option>
-                      <option value="PENDING">Somente Pendentes</option>
-                      <option value="RESOLVED">Somente Resolvidos</option>
-                  </select>
-              </div>
-              <div>
-                  <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Cliente</label>
-                  <select value={reportClient} onChange={e => setReportClient(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 min-w-[150px] max-w-[200px]">
-                      <option value="">Todos os Clientes</option>
-                      {uniqueClients.map(client => (
-                          <option key={client} value={client}>{client}</option>
-                      ))}
-                  </select>
-              </div>
-              <button onClick={handleGeneratePDF} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-slate-700 flex items-center gap-2 h-[34px]">
-                  <PrinterIcon className="w-4 h-4" /> Gerar Relatório PDF
-              </button>
-              <button 
-                onClick={handleGeneratePDFWithPhotos} 
-                disabled={isGenerating}
-                className="bg-blue-800 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-blue-700 flex items-center gap-2 h-[34px] disabled:opacity-50"
-              >
-                  <PhotoIcon className="w-4 h-4" /> {isGenerating ? 'Gerando...' : 'Relatório com Fotos'}
-              </button>
-              <button 
-                onClick={handleGenerateAstecaPDF} 
-                className="bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] uppercase tracking-widest hover:bg-red-700 flex items-center gap-2 h-[34px]"
-              >
-                  <BellIcon className="w-4 h-4" /> Relatório ASTECAS
-              </button>
-          </div>
-      )}
-
-      {/* Forms Section */}
+      <div className="mt-6 space-y-6">
+        {/* Forms Section */}
       {isAdding && (
         <Modal onClose={() => setIsAdding(false)}>
           <div className="animate-fadeIn">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 pr-8 sm:pr-0">
               <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
                   {viewMode === 'LIST' ? (editingIssueId ? 'Editar Pendência' : 'Registrar Pendência na Lista') : 'Novo Registro na Sua Agenda'}
               </h3>
@@ -1513,7 +1522,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       {editingTopic && (
         <Modal onClose={() => setEditingTopic(null)}>
           <div className="animate-fadeIn">
-            <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest mb-6">Editar Item da Pendência</h3>
+            <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest mb-6 pr-8 sm:pr-0">Editar Item da Pendência</h3>
             <form onSubmit={handleSaveSingleTopic} className="space-y-5">
               <div className="space-y-4">
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
@@ -1636,7 +1645,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       {viewingTopicDetail && (
         <Modal onClose={() => setViewingTopicDetail(null)}>
           <div className="animate-fadeIn space-y-6">
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start pr-8 sm:pr-0">
               <div>
                 <h3 className="font-bold text-slate-800 uppercase text-sm tracking-widest mb-1">Detalhes da Pendência</h3>
                 <div className="flex items-center gap-2">
@@ -1758,6 +1767,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               </div>
           </Modal>
       )}
+      </div>
     </div>
   );
 };
