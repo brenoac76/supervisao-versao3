@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { AgendaItem, User, AgendaIssue, Media } from '../types';
+import { AgendaItem, User, AgendaIssue, Media, AgendaTopic } from '../types';
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon, CalendarDaysIcon, BellIcon, RefreshIcon, XIcon, CameraIcon, CameraIcon as PhotoIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, PrinterIcon, PencilIcon, SparklesIcon } from './icons';
 import { generateUUID } from '../App';
 import { fetchWithRetry, SCRIPT_URL } from '../utils/api';
@@ -101,6 +101,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   ]);
   const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
   const [editingMedia, setEditingMedia] = useState<{ media: Media; topicId: string } | null>(null);
+  const [editingTopic, setEditingTopic] = useState<{ issueId: string; topic: AgendaTopic } | null>(null);
+  const [viewingTopicDetail, setViewingTopicDetail] = useState<{ issueId: string; topic: AgendaTopic } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Media Viewer State
@@ -312,6 +314,44 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           
       setFormTopics(topics);
       setIsAdding(true);
+  };
+
+  const handleEditTopic = (issueId: string, topic: AgendaTopic) => {
+    setEditingTopic({ issueId, topic });
+  };
+
+  const handleDeleteTopic = (issueId: string, topicId: string) => {
+    if (window.confirm("Deseja excluir este item da pendência?")) {
+      const updatedIssues = agendaIssues.map(issue => {
+        if (issue.id === issueId) {
+          return {
+            ...issue,
+            topics: issue.topics.filter(t => t.id !== topicId)
+          };
+        }
+        return issue;
+      }).filter(issue => issue.topics.length > 0);
+      onUpdateAgendaIssues(updatedIssues);
+    }
+  };
+
+  const handleSaveSingleTopic = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTopic) return;
+
+    const { issueId, topic } = editingTopic;
+    const updatedIssues = agendaIssues.map(issue => {
+      if (issue.id === issueId) {
+        return {
+          ...issue,
+          topics: issue.topics.map(t => t.id === topic.id ? topic : t)
+        };
+      }
+      return issue;
+    });
+
+    onUpdateAgendaIssues(updatedIssues);
+    setEditingTopic(null);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, topicId: string) => {
@@ -1319,6 +1359,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                             Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
                                                                         </span>
                                                                         <div className="flex gap-3">
+                                                                            <button 
+                                                                                onClick={() => {
+                                                                                    handleEditIssue(issue);
+                                                                                    // Adiciona um novo tópico vazio automaticamente ao clicar em "Adicionar"
+                                                                                    setFormTopics(prev => [...prev, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }]);
+                                                                                }} 
+                                                                                className="flex items-center gap-1 text-green-600 hover:text-green-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
+                                                                            >
+                                                                                <PlusCircleIcon className="w-3 h-3" /> Adicionar
+                                                                            </button>
                                                                             <button onClick={() => handleEditIssue(issue)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
                                                                                 <PencilIcon className="w-3 h-3" /> Editar
                                                                             </button>
@@ -1330,7 +1380,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                     {issue.topics.map((topic, idx) => {
                                                                         const topicDays = calculateDaysFromDate(topic.date || issue.date);
                                                                         return (
-                                                                            <div key={topic.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                                                                            <div 
+                                                                                key={topic.id} 
+                                                                                onClick={() => setViewingTopicDetail({ issueId: issue.id, topic })}
+                                                                                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0"
+                                                                            >
                                                                                 <div className="flex items-start gap-4 min-w-0">
                                                                                     <span className="text-slate-400 font-bold text-sm mt-0.5">{idx + 1}.</span>
                                                                                     <div className="flex flex-col gap-1 min-w-0">
@@ -1359,19 +1413,25 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                                                         </p>
                                                                                     </div>
                                                                                 </div>
-                                                                                <div className="flex items-center gap-2 self-end sm:self-center">
+                                                                                <div className="flex items-center gap-2 self-end sm:self-center mt-2 sm:mt-0">
                                                                                     {topic.media.length > 0 && (
-                                                                                        <button 
-                                                                                            onClick={(e) => {
-                                                                                                e.stopPropagation();
-                                                                                                setViewingMedia({ list: topic.media, index: 0, topicId: topic.id, issue: issue });
-                                                                                            }}
-                                                                                            className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                                                                                            title="Ver Fotos"
-                                                                                        >
-                                                                                            <PhotoIcon className="w-4 h-4" />
-                                                                                        </button>
+                                                                                        <div className="flex -space-x-2 overflow-hidden">
+                                                                                            {topic.media.slice(0, 3).map((m, i) => (
+                                                                                                <img 
+                                                                                                    key={m.id} 
+                                                                                                    src={getDisplayableDriveUrl(m.url) || undefined} 
+                                                                                                    className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
+                                                                                                    alt="" 
+                                                                                                />
+                                                                                            ))}
+                                                                                            {topic.media.length > 3 && (
+                                                                                                <span className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-slate-100 text-[10px] font-bold text-slate-500">
+                                                                                                    +{topic.media.length - 3}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
                                                                                     )}
+                                                                                    <ChevronRightIcon className="w-5 h-5 text-slate-300" />
                                                                                 </div>
                                                                             </div>
                                                                         );
@@ -1448,6 +1508,215 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             </div>
         )}
       </div>
+
+      {/* Media Viewer Modal */}
+      {editingTopic && (
+        <Modal onClose={() => setEditingTopic(null)}>
+          <div className="animate-fadeIn">
+            <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest mb-6">Editar Item da Pendência</h3>
+            <form onSubmit={handleSaveSingleTopic} className="space-y-5">
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex flex-col gap-3">
+                    <div className="relative flex-grow">
+                      <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Descrição</label>
+                      <textarea 
+                        required 
+                        value={editingTopic.topic.description} 
+                        onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, description: e.target.value } })}
+                        className="w-full p-3 pr-10 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-32 resize-none bg-white transition-all" 
+                        placeholder="Descreva o item da pendência..." 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleProfessionalizeText(editingTopic.topic.description, 'topic', editingTopic.topic.id)}
+                        disabled={isProfessionalizing === editingTopic.topic.id}
+                        className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                          isProfessionalizing === editingTopic.topic.id 
+                          ? 'bg-slate-100 text-slate-400' 
+                          : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                        title="Melhorar com IA"
+                      >
+                        <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === editingTopic.topic.id ? 'animate-pulse' : ''}`} />
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data do Item</label>
+                        <input 
+                          type="date" 
+                          required 
+                          value={editingTopic.topic.date} 
+                          onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, date: e.target.value } })}
+                          className="w-full p-2 border-2 border-slate-100 rounded-lg focus:border-blue-500 outline-none font-normal text-xs bg-white transition-all" 
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <label className="flex items-center gap-2 cursor-pointer group mt-4">
+                          <input 
+                            type="checkbox" 
+                            checked={!!editingTopic.topic.isAsteca} 
+                            onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, isAsteca: e.target.checked } })}
+                            className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                          />
+                          <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${editingTopic.topic.isAsteca ? 'text-red-600' : 'text-slate-400 group-hover:text-slate-600'}`}>ASTECA</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {editingTopic.topic.media.map(m => (
+                      <div key={m.id} className="relative w-20 h-20 group">
+                        <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover rounded-lg border border-slate-200" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-1">
+                          <button 
+                            type="button" 
+                            onClick={() => setEditingMedia({ media: m, topicId: editingTopic.topic.id })}
+                            className="bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-blue-600 shadow-lg"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, media: editingTopic.topic.media.filter(x => x.id !== m.id) } })} 
+                            className="bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center hover:bg-red-600 shadow-lg"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <label className={`w-20 h-20 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors ${uploadingTopicId === editingTopic.topic.id ? 'opacity-50' : ''}`}>
+                      <CameraIcon className="w-6 h-6 text-slate-400" />
+                      <span className="text-[8px] font-normal text-slate-400 uppercase mt-1">Anexar</span>
+                      <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingTopicId(editingTopic.topic.id);
+                        const tempId = generateUUID();
+                        const localUrl = URL.createObjectURL(file);
+                        const tempMedia: Media = { id: tempId, type: 'image', url: localUrl, name: file.name };
+                        setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: [...prev.topic.media, tempMedia] } } : null);
+                        try {
+                          const { base64: base64Data, mimeType } = await compressImage(file);
+                          const response = await fetchWithRetry(SCRIPT_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
+                          });
+                          const result = await response.json();
+                          if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+                          setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: prev.topic.media.map(m => m.id === tempId ? { ...m, url: result.url, originalUrl: result.url } : m) } } : null);
+                        } catch (error: any) {
+                          alert(`Erro no upload: ${error.message}`);
+                          setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: prev.topic.media.filter(m => m.id !== tempId) } } : null);
+                        } finally {
+                          setUploadingTopicId(null);
+                        }
+                      }} disabled={!!uploadingTopicId} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setEditingTopic(null)} className="px-6 py-2 text-slate-400 font-normal text-[10px] uppercase tracking-widest">Cancelar</button>
+                <button type="submit" className="px-8 py-3 bg-blue-600 text-white rounded-xl font-normal text-[11px] uppercase tracking-widest shadow-lg hover:bg-blue-700">
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      )}
+
+      {/* Topic Detail Modal */}
+      {viewingTopicDetail && (
+        <Modal onClose={() => setViewingTopicDetail(null)}>
+          <div className="animate-fadeIn space-y-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-bold text-slate-800 uppercase text-sm tracking-widest mb-1">Detalhes da Pendência</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    {new Date(viewingTopicDetail.topic.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                  </span>
+                  {viewingTopicDetail.topic.isAsteca && (
+                    <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">ASTECA</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    handleEditTopic(viewingTopicDetail.issueId, viewingTopicDetail.topic);
+                    setViewingTopicDetail(null);
+                  }}
+                  className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                  title="Editar"
+                >
+                  <PencilIcon className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => {
+                    handleDeleteTopic(viewingTopicDetail.issueId, viewingTopicDetail.topic.id);
+                    setViewingTopicDetail(null);
+                  }}
+                  className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                  title="Excluir"
+                >
+                  <TrashIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <p className={`text-base leading-relaxed whitespace-pre-wrap ${viewingTopicDetail.topic.status === 'Resolved' ? 'line-through text-green-600' : (viewingTopicDetail.topic.isAsteca ? 'text-red-600 font-bold' : 'text-slate-700')}`}>
+                {viewingTopicDetail.topic.description}
+              </p>
+            </div>
+
+            {viewingTopicDetail.topic.media.length > 0 && (
+              <div className="space-y-3">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Fotos Anexadas ({viewingTopicDetail.topic.media.length})</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {viewingTopicDetail.topic.media.map((m, idx) => (
+                    <div 
+                      key={m.id} 
+                      className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => {
+                        const issue = agendaIssues.find(i => i.id === viewingTopicDetail.issueId);
+                        setViewingMedia({ list: viewingTopicDetail.topic.media, index: idx, topicId: viewingTopicDetail.topic.id, issue });
+                      }}
+                    >
+                      <img src={getDisplayableDriveUrl(m.url) || undefined} className="w-full h-full object-cover" alt="" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button 
+                onClick={() => toggleTopicStatus(viewingTopicDetail.issueId, viewingTopicDetail.topic.id)}
+                className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-[11px] uppercase tracking-widest shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                  viewingTopicDetail.topic.status === 'Resolved' 
+                  ? 'bg-slate-100 text-slate-500' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {viewingTopicDetail.topic.status === 'Resolved' ? (
+                  <><RefreshIcon className="w-4 h-4" /> Reabrir Pendência</>
+                ) : (
+                  <><CheckCircleIcon className="w-4 h-4" /> Marcar como Concluído</>
+                )}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Media Viewer Modal */}
       {viewingMedia && (
