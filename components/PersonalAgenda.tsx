@@ -1017,7 +1017,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
         {/* PDF Filters (Only for LIST view) */}
         {viewMode === 'LIST' && !isAdding && (
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4 overflow-x-auto scrollbar-custom">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4 overflow-x-auto no-scrollbar">
                 <div className="flex-shrink-0">
                     <label className="block text-[9px] font-normal text-slate-500 uppercase mb-1 tracking-wider">Data Início</label>
                     <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500" />
@@ -1066,7 +1066,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto scrollbar-custom px-0.5 pt-4 pb-20">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-0.5 pt-4 pb-20">
         <div className="space-y-6">
           {/* Forms Section */}
       {isAdding && (
