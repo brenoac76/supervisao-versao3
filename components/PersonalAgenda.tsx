@@ -76,7 +76,17 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIssues = [], onUpdateAgenda, onUpdateAgendaIssues, viewMode = 'REMINDERS' }) => {
+const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIssues: rawAgendaIssues = [], onUpdateAgenda, onUpdateAgendaIssues, viewMode = 'REMINDERS' }) => {
+  const agendaIssues = useMemo(() => {
+    return rawAgendaIssues.map(issue => ({
+      ...issue,
+      topics: (issue.topics || []).map(t => ({
+        ...t,
+        media: t.media || []
+      }))
+    }));
+  }, [rawAgendaIssues]);
+
   const [isAdding, setIsAdding] = useState(false);
   const [filter, setFilter] = useState<'PENDING' | 'DONE' | 'ASTECA'>('PENDING');
   const [isGenerating, setIsGenerating] = useState(false);
