@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AgendaItem, User, AgendaIssue, Media, AgendaTopic } from '../types';
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon, CalendarDaysIcon, BellIcon, RefreshIcon, XIcon, CameraIcon, CameraIcon as PhotoIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, PrinterIcon, PencilIcon, SparklesIcon } from './icons';
 import { generateUUID } from '../App';
@@ -184,6 +184,18 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       return days < 0 ? 0 : days;
   };
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (expandedClient && scrollContainerRef.current) {
+      // Quando expandir, trava o scroll do container principal e foca no cliente
+      const element = document.getElementById(`client-row-${expandedClient}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [expandedClient]);
 
   const clientSummaries = useMemo(() => {
     const groups: Record<string, AgendaIssue[]> = {};
@@ -1066,7 +1078,10 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto no-scrollbar px-0.5 pt-4 pb-20">
+      <div 
+        ref={scrollContainerRef}
+        className={`flex-1 ${expandedClient ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar px-0.5 pt-4 pb-20`}
+      >
         <div className="space-y-6">
           {/* Forms Section */}
       {isAdding && (
@@ -1337,6 +1352,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                 clientSummaries.map(summary => (
                                     <React.Fragment key={summary.name}>
                                         <tr 
+                                            id={`client-row-${summary.name}`}
                                             onClick={() => setExpandedClient(expandedClient === summary.name ? null : summary.name)}
                                             className={`cursor-pointer hover:bg-slate-50 transition-colors sticky top-[38px] z-20 bg-white ${expandedClient === summary.name ? 'bg-blue-50/30 shadow-sm' : ''}`}
                                         >
@@ -1361,7 +1377,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                         {expandedClient === summary.name && (
                                             <tr>
                                                 <td colSpan={4} className="p-0 bg-slate-50/50">
-                                                    <div className="p-4 space-y-3 animate-slideDown max-h-[70vh] overflow-y-auto overscroll-contain scrollbar-custom">
+                                                    <div className="p-4 space-y-3 animate-slideDown h-[calc(100vh-320px)] sm:h-[calc(100vh-350px)] overflow-y-auto overscroll-contain scrollbar-custom">
                                                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
                                                             {summary.issues.map((issue) => (
                                                                 <div key={issue.id} className="divide-y divide-slate-50">
