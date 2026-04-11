@@ -1319,11 +1319,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       {/* List Content */}
       <div className="space-y-4">
         {viewMode === 'LIST' ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left font-normal border-collapse">
-                        <thead>
-                            <tr className="bg-slate-900 text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+                <div className="overflow-visible">
+                    <table className="w-full text-left font-normal border-collapse overflow-visible">
+                        <thead className="sticky top-0 z-20 bg-slate-900 shadow-sm">
+                            <tr className="text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
                                 <th className="p-3 sm:p-4 w-24 sm:w-32">Data</th>
                                 <th className="p-3 sm:p-4">Cliente</th>
                                 <th className="p-3 sm:p-4 w-16 sm:w-24 text-center">Dias</th>
@@ -1338,7 +1338,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                     <React.Fragment key={summary.name}>
                                         <tr 
                                             onClick={() => setExpandedClient(expandedClient === summary.name ? null : summary.name)}
-                                            className={`cursor-pointer hover:bg-slate-50 transition-colors ${expandedClient === summary.name ? 'bg-blue-50/30' : ''}`}
+                                            className={`cursor-pointer hover:bg-slate-50 transition-colors sticky top-[38px] z-20 bg-white ${expandedClient === summary.name ? 'bg-blue-50/30 shadow-sm' : ''}`}
                                         >
                                             <td className="p-4 text-slate-500 font-medium">
                                                 {new Date(summary.oldestDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}
@@ -1365,7 +1365,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
                                                             {summary.issues.map((issue) => (
                                                                 <div key={issue.id} className="divide-y divide-slate-50">
-                                                                    <div className="bg-slate-100/50 px-4 py-2 flex justify-between items-center">
+                                                                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-[90px] z-10 shadow-sm">
                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase">
                                                                             Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
                                                                         </span>
