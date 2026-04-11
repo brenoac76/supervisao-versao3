@@ -964,11 +964,11 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
   return (
     <div 
-      className="animate-fadeIn font-app max-w-5xl mx-auto font-normal overflow-x-hidden pb-20"
+      className="flex flex-col h-full animate-fadeIn font-app max-w-5xl mx-auto font-normal overflow-hidden"
       style={{ overscrollBehavior: 'none' }}
     >
-      {/* Sticky Header & Filters Container */}
-      <div className="sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm -mx-4 px-4 sm:mx-0 sm:px-0 pt-2 sm:pt-4 pb-4 space-y-4 shadow-sm border-b border-slate-200">
+      {/* Fixed Header & Filters Container */}
+      <div className="flex-none bg-slate-50/95 backdrop-blur-sm -mx-4 px-4 sm:mx-0 sm:px-0 pt-2 sm:pt-4 pb-4 space-y-4 shadow-sm border-b border-slate-200">
         {/* Header & Tabs */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div>
@@ -1065,8 +1065,10 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
         )}
       </div>
 
-      <div className="mt-6 space-y-6">
-        {/* Forms Section */}
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto no-scrollbar px-0.5 pt-4 pb-20">
+        <div className="space-y-6">
+          {/* Forms Section */}
       {isAdding && (
         <Modal onClose={() => setIsAdding(false)}>
           <div className="animate-fadeIn">
@@ -1767,6 +1769,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               </div>
           </Modal>
       )}
+      </div>
       </div>
     </div>
   );

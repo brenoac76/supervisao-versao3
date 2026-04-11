@@ -793,7 +793,7 @@ const App: React.FC = () => {
             </div>
         </header>
 
-        <div className="flex-grow flex flex-col min-h-0 overflow-y-auto" onClick={() => setOpenMenus({TEAM: false, LOGISTICS: false, REPORTS: false, AGENDA: false})}>
+        <div className={`flex-grow flex flex-col min-h-0 ${activeTab === 'AGENDA' ? 'overflow-hidden' : 'overflow-y-auto'}`} onClick={() => setOpenMenus({TEAM: false, LOGISTICS: false, REPORTS: false, AGENDA: false})}>
             {selectedClientId ? (
                 selectedEnvironmentId ? (
                    <div className="p-3 md:p-6 lg:p-8">
@@ -860,7 +860,7 @@ const App: React.FC = () => {
                         </div>
                     )}
                     {activeTab === 'AGENDA' && currentUser && (
-                        <div className="p-3 md:p-6 lg:p-8">
+                        <div className="p-3 md:p-6 lg:p-8 flex-grow flex flex-col min-h-0">
                             <PersonalAgenda user={currentUser} agenda={agendaItems} agendaIssues={agendaIssues} onUpdateAgenda={handleSaveAgenda} onUpdateAgendaIssues={handleSaveAgendaIssues} viewMode={agendaView} />
                         </div>
                     )}
