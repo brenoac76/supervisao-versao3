@@ -107,7 +107,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
   // Media Viewer State
   const [viewingMedia, setViewingMedia] = useState<{ list: Media[], index: number; topicId?: string; issue?: AgendaIssue } | null>(null);
-  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [viewingClientItems, setViewingClientItems] = useState<typeof clientSummaries[0] | null>(null);
   const [isProfessionalizing, setIsProfessionalizing] = useState<string | null>(null); // topicId or 'reminder'
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -188,14 +188,10 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (expandedClient && scrollContainerRef.current) {
-      // Quando expandir, trava o scroll do container principal e foca no cliente
-      const element = document.getElementById(`client-row-${expandedClient}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+    if (viewingClientItems && scrollContainerRef.current) {
+      // No longer need to scroll to row since it's a modal
     }
-  }, [expandedClient]);
+  }, [viewingClientItems]);
 
   const clientSummaries = useMemo(() => {
     const groups: Record<string, AgendaIssue[]> = {};
@@ -1349,14 +1345,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                             {clientSummaries.length === 0 ? (
                                 <tr><td colSpan={4} className="p-20 text-center text-slate-400 italic">Nenhuma pendência na lista.</td></tr>
                             ) : (
-                                clientSummaries
-                                    .filter(s => !expandedClient || s.name === expandedClient)
-                                    .map(summary => (
+                                clientSummaries.map(summary => (
                                     <React.Fragment key={summary.name}>
                                         <tr 
                                             id={`client-row-${summary.name}`}
-                                            onClick={() => setExpandedClient(expandedClient === summary.name ? null : summary.name)}
-                                            className={`cursor-pointer hover:bg-slate-50 transition-colors sticky top-[38px] z-20 bg-white ${expandedClient === summary.name ? 'bg-blue-50/30 shadow-sm' : ''}`}
+                                            onClick={() => setViewingClientItems(summary)}
+                                            className="cursor-pointer hover:bg-slate-50 transition-colors bg-white"
                                         >
                                             <td className="p-4 text-slate-500 font-medium">
                                                 {new Date(summary.oldestDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}
@@ -1373,105 +1367,9 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right">
-                                                <ChevronRightIcon className={`w-5 h-5 text-slate-300 transition-transform inline-block ${expandedClient === summary.name ? 'rotate-90 text-blue-500' : ''}`} />
+                                                <ChevronRightIcon className="w-5 h-5 text-slate-300 transition-transform inline-block" />
                                             </td>
                                         </tr>
-                                        {expandedClient === summary.name && (
-                                            <tr>
-                                                <td colSpan={4} className="p-0 bg-slate-50/50">
-                                                    <div className="p-4 space-y-3 animate-slideDown pb-20">
-                                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
-                                                            {summary.issues.map((issue) => (
-                                                                <div key={issue.id} className="divide-y divide-slate-50">
-                                                                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-[90px] z-10 shadow-sm">
-                                                                        <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                                                            Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
-                                                                        </span>
-                                                                        <div className="flex gap-3">
-                                                                            <button 
-                                                                                onClick={() => {
-                                                                                    handleEditIssue(issue);
-                                                                                    // Adiciona um novo tópico vazio automaticamente ao clicar em "Adicionar"
-                                                                                    setFormTopics(prev => [...prev, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }]);
-                                                                                }} 
-                                                                                className="flex items-center gap-1 text-green-600 hover:text-green-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
-                                                                            >
-                                                                                <PlusCircleIcon className="w-3 h-3" /> Adicionar
-                                                                            </button>
-                                                                            <button onClick={() => handleEditIssue(issue)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
-                                                                                <PencilIcon className="w-3 h-3" /> Editar
-                                                                            </button>
-                                                                            <button onClick={() => deleteIssue(issue.id)} className="flex items-center gap-1 text-red-600 hover:text-red-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
-                                                                                <TrashIcon className="w-3 h-3" /> Excluir
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                    {issue.topics.map((topic, idx) => {
-                                                                        const topicDays = calculateDaysFromDate(topic.date || issue.date);
-                                                                        return (
-                                                                            <div 
-                                                                                key={topic.id} 
-                                                                                onClick={() => setViewingTopicDetail({ issueId: issue.id, topic })}
-                                                                                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0"
-                                                                            >
-                                                                                <div className="flex items-start gap-4 min-w-0">
-                                                                                    <span className="text-slate-400 font-bold text-sm mt-0.5">{idx + 1}.</span>
-                                                                                    <div className="flex flex-col gap-1 min-w-0">
-                                                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                                                            <input 
-                                                                                                type="checkbox" 
-                                                                                                checked={topic.status === 'Resolved'} 
-                                                                                                onChange={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    toggleTopicStatus(issue.id, topic.id);
-                                                                                                }}
-                                                                                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                                                            />
-                                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                                                {new Date((topic.date || issue.date) + 'T12:00:00Z').toLocaleDateString('pt-BR')}
-                                                                                            </span>
-                                                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${topicDays > 10 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
-                                                                                                {topicDays} dias
-                                                                                            </span>
-                                                                                            {topic.isAsteca && (
-                                                                                                <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">ASTECA</span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : (topic.isAsteca ? 'text-red-600 font-bold' : 'text-slate-700')}`}>
-                                                                                            {topic.description}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-2 self-end sm:self-center mt-2 sm:mt-0">
-                                                                                    {topic.media.length > 0 && (
-                                                                                        <div className="flex -space-x-2 overflow-hidden">
-                                                                                            {topic.media.slice(0, 3).map((m, i) => (
-                                                                                                <img 
-                                                                                                    key={m.id} 
-                                                                                                    src={getDisplayableDriveUrl(m.url) || undefined} 
-                                                                                                    className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                                                                                                    alt="" 
-                                                                                                />
-                                                                                            ))}
-                                                                                            {topic.media.length > 3 && (
-                                                                                                <span className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-slate-100 text-[10px] font-bold text-slate-500">
-                                                                                                    +{topic.media.length - 3}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    <ChevronRightIcon className="w-5 h-5 text-slate-300" />
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
                                     </React.Fragment>
                                 ))
                             )}
@@ -1657,6 +1555,120 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                 </button>
               </div>
             </form>
+          </div>
+        </Modal>
+      )}
+
+      {/* Client Items Modal */}
+      {viewingClientItems && (
+        <Modal onClose={() => setViewingClientItems(null)}>
+          <div className="animate-fadeIn flex flex-col h-[80vh]">
+            <div className="flex justify-between items-center mb-4 pr-8 sm:pr-0">
+              <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest">
+                Pendências: <span className="font-bold">{viewingClientItems.name}</span>
+              </h3>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
+              {/* Fixed Header within Modal */}
+              <div className="bg-slate-900 shadow-sm sticky top-0 z-20">
+                <div className="flex text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
+                  <div className="p-3 sm:p-4 w-24 sm:w-32">Data</div>
+                  <div className="p-3 sm:p-4 flex-1">Cliente</div>
+                  <div className="p-3 sm:p-4 w-16 sm:w-24 text-center">Dias</div>
+                  <div className="p-3 sm:p-4 w-16 sm:w-24 text-right">Ações</div>
+                </div>
+              </div>
+
+              {/* Scrollable Body */}
+              <div className="flex-1 overflow-y-auto scrollbar-custom p-4 space-y-4 bg-slate-50/50">
+                {viewingClientItems.issues.map((issue) => (
+                  <div key={issue.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
+                    <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">
+                        Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                      </span>
+                      <div className="flex gap-3">
+                        <button 
+                          onClick={() => {
+                            handleEditIssue(issue);
+                            setFormTopics(prev => [...prev, { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }]);
+                          }} 
+                          className="flex items-center gap-1 text-green-600 hover:text-green-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight"
+                        >
+                          <PlusCircleIcon className="w-3 h-3" /> Adicionar
+                        </button>
+                        <button onClick={() => handleEditIssue(issue)} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
+                          <PencilIcon className="w-3 h-3" /> Editar
+                        </button>
+                        <button onClick={() => deleteIssue(issue.id)} className="flex items-center gap-1 text-red-600 hover:text-red-800 text-[10px] sm:text-[11px] font-bold uppercase tracking-tight">
+                          <TrashIcon className="w-3 h-3" /> Excluir
+                        </button>
+                      </div>
+                    </div>
+                    {issue.topics.map((topic, idx) => {
+                      const topicDays = calculateDaysFromDate(topic.date || issue.date);
+                      return (
+                        <div 
+                          key={topic.id} 
+                          onClick={() => setViewingTopicDetail({ issueId: issue.id, topic })}
+                          className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0"
+                        >
+                          <div className="flex items-start gap-4 min-w-0">
+                            <span className="text-slate-400 font-bold text-sm mt-0.5">{idx + 1}.</span>
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <input 
+                                  type="checkbox" 
+                                  checked={topic.status === 'Resolved'} 
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    toggleTopicStatus(issue.id, topic.id);
+                                  }}
+                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                />
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                  {new Date((topic.date || issue.date) + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                </span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${topicDays > 10 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
+                                  {topicDays} dias
+                                </span>
+                                {topic.isAsteca && (
+                                  <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">ASTECA</span>
+                                )}
+                              </div>
+                              <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : (topic.isAsteca ? 'text-red-600 font-bold' : 'text-slate-700')}`}>
+                                {topic.description}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 self-end sm:self-center mt-2 sm:mt-0">
+                            {topic.media.length > 0 && (
+                              <div className="flex -space-x-2 overflow-hidden">
+                                {topic.media.slice(0, 3).map((m, i) => (
+                                  <img 
+                                    key={m.id} 
+                                    src={getDisplayableDriveUrl(m.url) || undefined} 
+                                    className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
+                                    alt="" 
+                                  />
+                                ))}
+                                {topic.media.length > 3 && (
+                                  <span className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-slate-100 text-[10px] font-bold text-slate-500">
+                                    +{topic.media.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <ChevronRightIcon className="w-5 h-5 text-slate-300" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Modal>
       )}
