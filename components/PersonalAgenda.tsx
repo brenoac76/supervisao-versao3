@@ -189,10 +189,10 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
 
   useEffect(() => {
     if (expandedClient && scrollContainerRef.current) {
-      // Quando expandir, trava o scroll do container principal e foca no cliente
+      // Quando expandir, garante que o cliente esteja visível mas permite o scroll natural
       const element = document.getElementById(`client-row-${expandedClient}`);
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
   }, [expandedClient]);
@@ -1080,7 +1080,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       {/* Scrollable Content Area */}
       <div 
         ref={scrollContainerRef}
-        className={`flex-1 ${expandedClient ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar px-0.5 pt-4 pb-20`}
+        className="flex-1 overflow-y-auto no-scrollbar px-0.5 pt-4 pb-20"
       >
         <div className="space-y-6">
           {/* Forms Section */}
@@ -1377,8 +1377,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                         {expandedClient === summary.name && (
                                             <tr>
                                                 <td colSpan={4} className="p-0 bg-slate-50/50">
-                                                    <div className="p-4 space-y-3 animate-slideDown h-[calc(100vh-320px)] sm:h-[calc(100vh-350px)] overflow-y-auto overscroll-contain scrollbar-custom">
-                                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+                                                    <div className="p-4 space-y-3 animate-slideDown max-h-[60vh] overflow-y-auto overscroll-contain scrollbar-custom pb-10">
+                                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100 mb-6">
                                                             {summary.issues.map((issue) => (
                                                                 <div key={issue.id} className="divide-y divide-slate-50">
                                                                     <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-0 z-10 shadow-sm">
