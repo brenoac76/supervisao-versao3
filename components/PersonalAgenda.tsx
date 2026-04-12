@@ -1097,7 +1097,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
                 <div className="overflow-visible">
                     <table className="w-full text-left font-normal border-collapse overflow-visible">
-                        <thead className="sticky top-0 z-20 bg-slate-900 shadow-sm">
+                        <thead className="sticky top-[-16px] z-20 bg-slate-900 shadow-sm">
                             <tr className="text-white text-[9px] sm:text-[10px] uppercase tracking-widest font-normal">
                                 <th className="p-3 sm:p-4 w-24 sm:w-32">Data</th>
                                 <th className="p-3 sm:p-4">Cliente</th>
@@ -1350,9 +1350,9 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               {/* Scrollable Body */}
               <div className="flex-1 overflow-y-auto scrollbar-custom bg-slate-50/50 min-h-0 z-10">
                 <div className="p-4 space-y-4">
-                  {viewingClientItems.issues.map((issue) => (
-                    <div key={issue.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
-                      <div className="bg-slate-100 px-4 py-2 flex justify-between items-center sticky top-0 z-20 shadow-sm border-b border-slate-200">
+                             <div key={issue.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                      {/* Barra de título azul clara fixa */}
+                      <div className="bg-blue-50 px-4 py-2 flex justify-between items-center sticky top-0 z-20 shadow-sm border-b border-slate-200 flex-shrink-0">
                         <span className="text-[10px] font-bold text-slate-500 uppercase">
                           Lançamento: {new Date(issue.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
                         </span>
@@ -1384,67 +1384,68 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                           </button>
                         </div>
                       </div>
-                      <div className="divide-y divide-slate-50">
+                      {/* Área de itens com rolagem */}
+                      <div className="divide-y divide-slate-100 overflow-y-auto max-h-[300px] scrollbar-custom">
                         {issue.topics.map((topic, idx) => {
-                      const topicDays = calculateDaysFromDate(topic.date || issue.date);
-                      return (
-                        <div 
-                          key={topic.id} 
-                          onClick={() => setViewingTopicDetail({ issueId: issue.id, topic })}
-                          className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0"
-                        >
-                          <div className="flex items-start gap-4 min-w-0">
-                            <span className="text-slate-400 font-bold text-sm mt-0.5">{idx + 1}.</span>
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <input 
-                                  type="checkbox" 
-                                  checked={topic.status === 'Resolved'} 
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    toggleTopicStatus(issue.id, topic.id);
-                                  }}
-                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                />
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                  {new Date((topic.date || issue.date) + 'T12:00:00Z').toLocaleDateString('pt-BR')}
-                                </span>
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${topicDays > 10 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
-                                  {topicDays} dias
-                                </span>
-                                {topic.isAsteca && (
-                                  <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">ASTECA</span>
-                                )}
+                          const topicDays = calculateDaysFromDate(topic.date || issue.date);
+                          return (
+                            <div 
+                              key={topic.id} 
+                              onClick={() => setViewingTopicDetail({ issueId: issue.id, topic })}
+                              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0"
+                            >
+                              <div className="flex items-start gap-4 min-w-0">
+                                <span className="text-slate-400 font-bold text-sm mt-0.5">{idx + 1}.</span>
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={topic.status === 'Resolved'} 
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        toggleTopicStatus(issue.id, topic.id);
+                                      }}
+                                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                      {new Date((topic.date || issue.date) + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                                    </span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${topicDays > 10 ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}>
+                                      {topicDays} dias
+                                    </span>
+                                    {topic.isAsteca && (
+                                      <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">ASTECA</span>
+                                    )}
+                                  </div>
+                                  <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : (topic.isAsteca ? 'text-red-600 font-bold' : 'text-slate-700')}`}>
+                                    {topic.description}
+                                  </p>
+                                </div>
                               </div>
-                              <p className={`text-sm leading-relaxed ${topic.status === 'Resolved' ? 'line-through text-green-600' : (topic.isAsteca ? 'text-red-600 font-bold' : 'text-slate-700')}`}>
-                                {topic.description}
-                              </p>
+                              <div className="flex items-center gap-2 self-end sm:self-center mt-2 sm:mt-0">
+                                {topic.media && topic.media.length > 0 && (
+                                  <div className="flex -space-x-2 overflow-hidden">
+                                    {topic.media.slice(0, 3).map((m, i) => (
+                                      <img 
+                                        key={m.id} 
+                                        src={getDisplayableDriveUrl(m.url) || undefined} 
+                                        className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
+                                        alt="" 
+                                      />
+                                    ))}
+                                    {topic.media.length > 3 && (
+                                      <span className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-slate-100 text-[10px] font-bold text-slate-500">
+                                        +{topic.media.length - 3}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                <ChevronRightIcon className="w-5 h-5 text-slate-300" />
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 self-end sm:self-center mt-2 sm:mt-0">
-                            {topic.media.length > 0 && (
-                              <div className="flex -space-x-2 overflow-hidden">
-                                {topic.media.slice(0, 3).map((m, i) => (
-                                  <img 
-                                    key={m.id} 
-                                    src={getDisplayableDriveUrl(m.url) || undefined} 
-                                    className="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" 
-                                    alt="" 
-                                  />
-                                ))}
-                                {topic.media.length > 3 && (
-                                  <span className="flex items-center justify-center h-8 w-8 rounded-full ring-2 ring-white bg-slate-100 text-[10px] font-bold text-slate-500">
-                                    +{topic.media.length - 3}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            <ChevronRightIcon className="w-5 h-5 text-slate-300" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          );
+                        })}
+                      </div>
                 </div>
               ))}
             </div>
