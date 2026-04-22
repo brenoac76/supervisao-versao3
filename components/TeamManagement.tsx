@@ -23,7 +23,7 @@ import {
 } from './icons';
 import { generateUUID } from '../App';
 import { jsPDF } from 'jspdf';
-import { SCRIPT_URL, fetchWithRetry } from '../utils/api';
+import { SCRIPT_URL, fetchWithRetry, safeJSONFetch } from '../utils/api';
 
 interface TeamManagementProps {
   assemblers: Assembler[];
@@ -139,7 +139,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ assemblers, clients, on
   useEffect(() => {
       if (activeView === 'EVALUATION') {
           fetchWithRetry(`${SCRIPT_URL}?action=GET_SCORES`)
-              .then(res => res.json())
+              .then(safeJSONFetch)
               .then(data => {
                   if (data.success && Array.isArray(data.data)) setScores(data.data);
               })

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Client, PunchList, PunchListItem, PunchListIssue, Assembler, Media } from '../types';
+import jsPDF from 'jspdf';
 import { SCRIPT_URL, generateUUID } from '../App';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONParse, safeJSONFetch } from '../utils/api';
 import Modal from './Modal';
 import {
     ClipboardCheckIcon,
@@ -314,8 +315,6 @@ const PunchListManager: React.FC<PunchListManagerProps> = ({ client, assemblers,
     const handleGenerateListPDF = async (list: PunchList) => {
         setIsGeneratingPdf(true);
         try {
-            if (!(window as any).jspdf) throw new Error("Biblioteca PDF não carregada.");
-            const { jsPDF } = (window as any).jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
@@ -613,7 +612,7 @@ const PunchListManager: React.FC<PunchListManagerProps> = ({ client, assemblers,
         
         // Use punchListsRef.current to get the LATEST state before async op
         const currentPunchLists = punchListsRef.current;
-        const listsCopy = JSON.parse(JSON.stringify(currentPunchLists));
+        const listsCopy = (currentPunchLists && Array.isArray(currentPunchLists)) ? safeJSONParse(JSON.stringify(currentPunchLists)) : [];
         
         for(const l of listsCopy) {
             for(const i of l.items) {
@@ -641,8 +640,8 @@ const PunchListManager: React.FC<PunchListManagerProps> = ({ client, assemblers,
                     data: { base64Data, fileName: file.name, mimeType: mimeType }
                 }),
             });
-            const result = await response.json();
-            if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+            const result = await safeJSONFetch(response);
+            if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
 
             // CRITICAL: Use ref again to get latest state (which includes text changes made during upload)
             const latestLists = punchListsRef.current;

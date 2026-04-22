@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { AgendaItem, User, AgendaIssue, Media, AgendaTopic } from '../types';
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon, CalendarDaysIcon, BellIcon, RefreshIcon, XIcon, CameraIcon, CameraIcon as PhotoIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, PrinterIcon, PencilIcon, SparklesIcon } from './icons';
 import { generateUUID } from '../App';
-import { fetchWithRetry, SCRIPT_URL } from '../utils/api';
+import { fetchWithRetry, SCRIPT_URL, safeJSONFetch } from '../utils/api';
 import Modal from './Modal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -394,8 +394,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
       });
-      const result = await response.json();
-      if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+      const result = await safeJSONFetch(response);
+      if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
       
       setFormTopics(prev => prev.map(t => t.id === topicId ? { 
         ...t, 
@@ -1301,8 +1301,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                             body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
                           });
-                          const result = await response.json();
-                          if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+                          const result = await safeJSONFetch(response);
+                          if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
                           setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: prev.topic.media.map(m => m.id === tempId ? { ...m, url: result.url, originalUrl: result.url } : m) } } : null);
                         } catch (error: any) {
                           alert(`Erro no upload: ${error.message}`);
@@ -1610,8 +1610,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                     } 
                   }),
                 });
-                const result = await response.json();
-                if (result.success && result.url) {
+                const result = await safeJSONFetch(response);
+                if (result && result.success && result.url) {
                   finalMedia = { ...updatedMedia, url: result.url };
                 }
               } catch (error) {
@@ -1743,8 +1743,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                             body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
                           });
-                          const result = await response.json();
-                          if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+                          const result = await safeJSONFetch(response);
+                          if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
                           setEditingTopic(prev => prev ? { ...prev, topic: { ...prev.topic, media: prev.topic.media.map(m => m.id === tempId ? { ...m, url: result.url, originalUrl: result.url } : m) } } : null);
                         } catch (error: any) {
                           alert(`Erro no upload: ${error.message}`);

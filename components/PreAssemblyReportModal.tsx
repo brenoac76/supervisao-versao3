@@ -6,6 +6,7 @@ import { DocumentTextIcon, PrinterIcon } from './icons';
 import SignaturePad from './SignaturePad';
 import { jsPDF } from 'jspdf';
 import { SCRIPT_URL } from '../App';
+import { safeJSONFetch } from '../utils/api';
 
 interface PreAssemblyReportModalProps {
   client: Client;
@@ -85,7 +86,7 @@ const PreAssemblyReportModal: React.FC<PreAssemblyReportModalProps> = ({ client,
 
       // --- LOGO & HEADER (DYNAMIC FETCH FROM DRIVE) ---
       try {
-          const logoRes = await fetch(`${SCRIPT_URL}?action=GET_LOGO`).then(r => r.json());
+          const logoRes = await fetch(`${SCRIPT_URL}?action=GET_LOGO`).then(safeJSONFetch);
           if (logoRes.success && logoRes.url) {
               const displayUrl = getDisplayableDriveUrl(logoRes.url);
               const imgResponse = await fetch(displayUrl);

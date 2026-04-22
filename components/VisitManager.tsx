@@ -19,7 +19,7 @@ import {
   ZoomOutIcon,
   RefreshIcon
 } from './icons';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONFetch } from '../utils/api';
 
 // --- Helpers reused ---
 const getDisplayableDriveUrl = (url: string): string | undefined => {
@@ -208,8 +208,8 @@ const VisitManager: React.FC<VisitManagerProps> = ({ client, onUpdateClient }) =
           data: { base64Data, fileName: file.name, mimeType: mimeType }
         }),
       });
-      const result = await response.json();
-      if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+      const result = await safeJSONFetch(response);
+      if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
 
       const finalMedia = { ...tempMedia, url: result.url };
       URL.revokeObjectURL(localUrl);
@@ -231,14 +231,8 @@ const VisitManager: React.FC<VisitManagerProps> = ({ client, onUpdateClient }) =
   const generateTimelineReport = async () => {
     // Basic timeline logic preserved
     setIsGenerating(true);
-    if (!(window as any).jspdf) {
-        alert("Biblioteca PDF não carregada.");
-        setIsGenerating(false);
-        return;
-    }
 
     try {
-        const { jsPDF } = (window as any).jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
@@ -365,14 +359,8 @@ const VisitManager: React.FC<VisitManagerProps> = ({ client, onUpdateClient }) =
   // --- PDF GENERATION: VISITA INDIVIDUAL (LAYOUT EM CARDS) ---
   const generateSingleVisitReport = async (visit: VisitLog) => {
     setIsGenerating(true);
-    if (!(window as any).jspdf) {
-        alert("Biblioteca PDF não carregada. Tente recarregar a página.");
-        setIsGenerating(false);
-        return;
-    }
 
     try {
-        const { jsPDF } = (window as any).jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();

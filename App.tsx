@@ -41,7 +41,7 @@ import {
     ShieldCheckIcon,
     ShoppingCartIcon
 } from './components/icons';
-import { SCRIPT_URL, fetchWithRetry, generateUUID } from './utils/api';
+import { SCRIPT_URL, fetchWithRetry, generateUUID, safeJSONParse, safeJSONFetch } from './utils/api';
 import { APP_VERSION } from './utils/version';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -110,9 +110,26 @@ const App: React.FC = () => {
   const pendingSaveClientsRef = useRef<Map<string, Client>>(new Map());
 
   // --- CAMADA DE PROTEÇÃO: Payload Slim & Filtragem de Atributos ---
+  const safeStringify = (obj: any): string => {
+      try {
+          return JSON.stringify(obj) || 'null';
+      } catch (e) {
+          console.error("Erro ao serializar JSON:", e);
+          return 'null';
+      }
+  };
+
   const sanitizeObjectForSync = (obj: any): any => {
-    if (!obj) return obj;
-    const cleaned = JSON.parse(JSON.stringify(obj));
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    let cleaned;
+    try {
+        const stringified = safeStringify(obj);
+        if (!stringified || stringified === 'undefined') return obj;
+        cleaned = safeJSONParse(stringified);
+    } catch (e) {
+        return obj;
+    }
     
     const traverseAndClean = (item: any) => {
         if (!item || typeof item !== 'object') return;
@@ -176,8 +193,8 @@ const App: React.FC = () => {
   const loadLogo = useCallback(async () => {
       try {
           const response = await fetchWithRetry(`${SCRIPT_URL}?action=GET_LOGO`);
-          const res = await response.json();
-          if (res.success && res.url) {
+          const res = await safeJSONFetch(response);
+          if (res && res.success && res.url) {
               const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)|docs\.google\.com\/uc\?id=)([a-zA-Z0-9_-]{25,})/;
               const match = res.url.match(driveRegex);
               if (match && match[1]) {
@@ -195,21 +212,20 @@ const App: React.FC = () => {
     loadLogo();
     loadUsers();
     const sessionUser = localStorage.getItem('app_current_user');
-    if (sessionUser) {
-        try {
-            const user = JSON.parse(sessionUser);
-            if (user && typeof user.username === 'string') setCurrentUser(user);
-        } catch (e) {}
+    if (sessionUser && sessionUser !== 'undefined') {
+        const user = safeJSONParse(sessionUser);
+        if (user && typeof user.username === 'string') setCurrentUser(user);
     }
+
   }, [loadLogo]);
 
   const loadUsers = async () => {
     setAuthLoading(true);
     try {
         const response = await fetchWithRetry(`${SCRIPT_URL}?action=GET_USERS`);
-        const result = await response.json();
+        const result = await safeJSONFetch(response);
         let loadedUsers: User[] = [];
-        if (result.success && Array.isArray(result.data)) {
+        if (result && result.success && Array.isArray(result.data)) {
             loadedUsers = result.data.reduce((acc: User[], u: any) => {
                 if (!u || !u.username) return acc;
                 acc.push({
@@ -235,6 +251,7 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (user: User) => {
+    if (!user) return;
     setCurrentUser(user);
     localStorage.setItem('app_current_user', JSON.stringify(user));
   };
@@ -257,8 +274,8 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'SAVE_USERS', data: sanitizeObjectForSync(usersList) }),
       });
-      const result = await response.json();
-      if (!result.success) alert(`Falha ao salvar usuários na nuvem: ${result.message}`);
+      const result = await safeJSONFetch(response);
+      if (result && !result.success) alert(`Falha ao salvar usuários na nuvem: ${result.message}`);
     } catch (e: any) {
       console.error(`Erro de conexão: ${e.message}`);
     } finally {
@@ -280,7 +297,9 @@ const App: React.FC = () => {
     syncUsers(updatedUsers);
     if (currentUser && currentUser.id === sanitizedUser.id) {
         setCurrentUser(sanitizedUser);
-        localStorage.setItem('app_current_user', JSON.stringify(sanitizedUser));
+        if (sanitizedUser) {
+            localStorage.setItem('app_current_user', JSON.stringify(sanitizedUser));
+        }
     }
   };
 
@@ -324,35 +343,35 @@ const App: React.FC = () => {
           clientsPromise, assemblersPromise, manifestsPromise, agendaPromise, agendaIssuesPromise, fleetPromise, ordersPromise
       ]);
       
-      const clientsResult = await clientsResponse.json();
+      const clientsResult = await safeJSONFetch(clientsResponse);
       if (!clientsResult.success) throw new Error(clientsResult.message || 'Erro no script.');
       setClients(Array.isArray(clientsResult.data) ? clientsResult.data.filter((c: any) => c && c.name) : []);
       
       if (assemblersResponse) {
-          const assemblersResult = await assemblersResponse.json();
+          const assemblersResult = await safeJSONFetch(assemblersResponse);
           if (assemblersResult.success && Array.isArray(assemblersResult.data)) setAssemblers(assemblersResult.data);
       }
       if (manifestsResponse) {
-          const manifestsResult = await manifestsResponse.json();
+          const manifestsResult = await safeJSONFetch(manifestsResponse);
           if (manifestsResult.success && Array.isArray(manifestsResult.data)) setManifests(manifestsResult.data);
       }
       if (agendaResponse) {
-          const agendaResult = await agendaResponse.json();
+          const agendaResult = await safeJSONFetch(agendaResponse);
           if (agendaResult.success && Array.isArray(agendaResult.data)) setAgendaItems(agendaResult.data);
       }
       if (agendaIssuesResponse) {
-          const agendaIssuesResult = await agendaIssuesResponse.json();
+          const agendaIssuesResult = await safeJSONFetch(agendaIssuesResponse);
           if (agendaIssuesResult.success && Array.isArray(agendaIssuesResult.data)) setAgendaIssues(agendaIssuesResult.data);
       }
       if (fleetResponse) {
-          const fleetResult = await fleetResponse.json();
+          const fleetResult = await safeJSONFetch(fleetResponse);
           if (fleetResult.success) {
               setVehicles(fleetResult.vehicles || []);
               setFleetLogs(fleetResult.logs || []);
           }
       }
       if (ordersResponse) {
-          const ordersResult = await ordersResponse.json();
+          const ordersResult = await safeJSONFetch(ordersResponse);
           if (ordersResult.success && Array.isArray(ordersResult.data)) setFurnitureOrders(ordersResult.data);
       }
       
@@ -377,7 +396,7 @@ const App: React.FC = () => {
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'UPDATE_CLIENT', data: slimClient }),
         });
-        const result = await res.json();
+        const result = await safeJSONFetch(res);
         if (!result.success) throw new Error(result.message);
       }
     } catch (e: any) {
@@ -408,8 +427,8 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'UPDATE_CLIENT', data: sanitizeObjectForSync(newClient) }),
       });
-      const result = await response.json();
-      if (result.success) setClients([newClient, ...clients]);
+      const result = await safeJSONFetch(response);
+      if (result && result.success) setClients([newClient, ...clients]);
       else alert("Falha ao salvar cliente no banco.");
     } catch (e: any) {
       alert(`Erro de conexão: ${e.message}`);
@@ -427,8 +446,8 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'DELETE_CLIENT', data: { id: clientId } }),
       });
-      const result = await response.json();
-      if (result.success) {
+      const result = await safeJSONFetch(response);
+      if (result && result.success) {
         setClients(clients.filter(c => c.id !== clientId));
         if (selectedClientId === clientId) setSelectedClientId(null);
       } else alert("Erro ao excluir cliente.");
@@ -447,7 +466,7 @@ const App: React.FC = () => {
               headers: { 'Content-Type': 'text/plain;charset=utf-8' },
               body: JSON.stringify({ action: 'SAVE_ASSEMBLERS', data: sanitizeObjectForSync(list) }),
           });
-          const result = await res.json();
+          const result = await safeJSONFetch(res);
           if (result.success) setAssemblers(list);
           else alert("Erro ao salvar montadores.");
       } catch (e: any) {
@@ -465,7 +484,7 @@ const App: React.FC = () => {
               headers: { 'Content-Type': 'text/plain;charset=utf-8' },
               body: JSON.stringify({ action: 'SAVE_MANIFESTS', data: sanitizeObjectForSync(list) }),
           });
-          const result = await res.json();
+          const result = await safeJSONFetch(res);
           if (result.success) setManifests(list);
           else alert("Erro ao salvar romaneios.");
       } catch (e: any) {
@@ -486,7 +505,7 @@ const App: React.FC = () => {
                   data: { vehicles: sanitizeObjectForSync(v), logs: sanitizeObjectForSync(l) } 
               }),
           });
-          const result = await res.json();
+          const result = await safeJSONFetch(res);
           if (result.success) {
               setVehicles(v);
               setFleetLogs(l);
@@ -540,7 +559,7 @@ const App: React.FC = () => {
               headers: { 'Content-Type': 'text/plain;charset=utf-8' },
               body: JSON.stringify({ action: 'SAVE_FURNITURE_ORDERS', data: sanitizeObjectForSync(list) }),
           });
-          const result = await res.json();
+          const result = await safeJSONFetch(res);
           if (result.success) setFurnitureOrders(list);
           else alert("Erro ao salvar pedidos.");
       } catch (e: any) {

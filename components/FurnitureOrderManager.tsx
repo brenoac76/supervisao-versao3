@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { FurnitureOrder, FurnitureOrderItem, Assembler, Client, Media } from '../types';
 import { generateUUID, SCRIPT_URL } from '../App';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONFetch } from '../utils/api';
 import Modal from './Modal';
 import { jsPDF } from 'jspdf';
 import { 
@@ -145,8 +145,8 @@ const FurnitureOrderManager: React.FC<FurnitureOrderManagerProps> = ({ orders, a
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: `order_${Date.now()}.jpg`, mimeType: mimeType } }),
             });
-            const result = await response.json();
-            if (result.success) {
+            const result = await safeJSONFetch(response);
+            if (result && result.success) {
                 setNewMedia({ id: generateUUID(), type: 'image', url: result.url, name: file.name });
             }
         } catch (err) { 

@@ -7,6 +7,7 @@ import { DocumentTextIcon, TrashIcon, CheckCircleIcon, PrinterIcon } from './ico
 import SignaturePad from './SignaturePad';
 import { jsPDF } from 'jspdf';
 import { SCRIPT_URL } from '../App';
+import { safeJSONFetch } from '../utils/api';
 
 interface TodeschiniReportModalProps {
   client: Client;
@@ -167,7 +168,7 @@ const TodeschiniReportModal: React.FC<TodeschiniReportModalProps> = ({ client, e
 
     // --- Header Logo Discovery ---
     try {
-        const logoRes = await fetch(`${SCRIPT_URL}?action=GET_LOGO`).then(r => r.json());
+        const logoRes = await fetch(`${SCRIPT_URL}?action=GET_LOGO`).then(safeJSONFetch);
         if (logoRes.success && logoRes.url) {
             const displayUrl = getDisplayableDriveUrl(logoRes.url);
             const imgResponse = await fetch(displayUrl);

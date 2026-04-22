@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Client, MaterialOrder, MaterialOrderItem, Media } from '../types';
 import { generateUUID, SCRIPT_URL } from '../App';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONParse } from '../utils/api';
 import Modal from './Modal';
 import { 
   ShoppingCartIcon, 
@@ -81,7 +81,7 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
         // SANITIZAÇÃO VITAL PARA O DEPLOY
         const sanitizedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         
-        return JSON.parse(sanitizedText);
+        return safeJSONParse(sanitizedText);
     } catch (e) {
         console.error("Falha Crítica no Scanner IA:", e);
         return null;
@@ -107,7 +107,7 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
                 const fileId = getFileIdFromUrl(item.media.url);
                 if (fileId) {
                     const proxyUrl = `${SCRIPT_URL}?action=GET_FILE_BASE64&fileId=${fileId}`;
-                    const proxyResp = await fetch(proxyUrl).then(r => r.json());
+                    const proxyResp = await fetch(proxyUrl).then(safeJSONFetch);
                     
                     if (proxyResp.success && proxyResp.data) {
                         const extracted = await analyzeLabelExhaustive(proxyResp.data);
@@ -190,7 +190,7 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
                 const fileId = getFileIdFromUrl(item.media.url);
                 if (fileId) {
                     const proxyUrl = `${SCRIPT_URL}?action=GET_FILE_BASE64&fileId=${fileId}`;
-                    const proxyResp = await fetch(proxyUrl).then(r => r.json());
+                    const proxyResp = await fetch(proxyUrl).then(safeJSONFetch);
                     if (proxyResp.success && proxyResp.data) {
                         pdf.setDrawColor(220).setLineWidth(0.1).rect(margin + 2, yPos + 2, 54, 54);
                         pdf.addImage(proxyResp.data, 'JPEG', margin + 2.5, yPos + 2.5, 53, 53, undefined, 'FAST');
@@ -243,7 +243,7 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: `etiqueta_${Date.now()}.jpg`, mimeType: 'image/jpeg' } }),
-              }).then(res => res.json());
+              }).then(safeJSONFetch);
               if (uploadRes.success) setNewItemMedia(prev => prev ? { ...prev, url: uploadRes.url } : null);
           };
       } finally { setIsUploading(false); }

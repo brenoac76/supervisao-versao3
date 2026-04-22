@@ -83,6 +83,22 @@ async function startServer() {
     }
   });
 
+  // API para Proxy de Imagens (Contorna CORS)
+  app.get("/api/proxy-image", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.status(400).json({ error: "URL não fornecida" });
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Falha ao buscar imagem");
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.set("Content-Type", response.headers.get("content-type") || "image/jpeg");
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("[API] Erro ao proxy imagem:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Configuração do Vite / Estáticos
   const isProd = process.env.NODE_ENV === "production" || process.env.VITE_PROD === "true";
   

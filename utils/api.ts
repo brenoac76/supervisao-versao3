@@ -58,3 +58,32 @@ export const generateUUID = (): string => {
     return v.toString(16);
   });
 };
+
+export const safeJSONFetch = async (response: Response, defaultValue: any = null): Promise<any> => {
+   const text = await response.text();
+   const trimmedText = text.trim();
+   if (!text || trimmedText === 'undefined' || trimmedText === '') return defaultValue;
+   try {
+       return JSON.parse(trimmedText);
+   } catch (e) {
+       console.error("Erro ao fazer parse de resposta de fetch:", e, "Input:", text);
+       return defaultValue;
+   }
+};
+
+export const fetchJSONSafe = async (url: string, options: FetchOptions = {}, defaultValue: any = null): Promise<any> => {
+    const response = await fetchWithRetry(url, options);
+    return safeJSONFetch(response, defaultValue);
+};
+
+export const safeJSONParse = (jsonString: string | null | undefined, defaultValue: any = null): any => {
+    if (!jsonString || typeof jsonString !== 'string') return defaultValue;
+    const trimmed = jsonString.trim();
+    if (trimmed === 'undefined' || trimmed === 'null' || trimmed === '') return defaultValue;
+    try {
+        return JSON.parse(trimmed);
+    } catch (e) {
+        console.error("Erro ao fazer parse de JSON:", e, "Input:", jsonString);
+        return defaultValue;
+    }
+};

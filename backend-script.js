@@ -3,6 +3,17 @@
 // BACKEND GOOGLE APPS SCRIPT - v2.4.6 (STABLE VERSION)
 // ============================================================================
 
+function safeJSONParse(str, defaultValue) {
+  if (!str || typeof str !== 'string') return defaultValue;
+  var trimmed = str.trim();
+  if (trimmed === 'undefined' || trimmed === 'null' || trimmed === '') return defaultValue;
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    return defaultValue;
+  }
+}
+
 /**
  * @OnlyCurrentDoc
  */
@@ -35,7 +46,7 @@ function checkAndSendReminders() {
       if (!jsonCol) continue;
 
       try {
-        let item = JSON.parse(jsonCol);
+        let item = safeJSONParse(jsonCol, {});
         if (item.status === 'Pending') {
           const dueDate = new Date(item.dueDate);
           
@@ -114,7 +125,7 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const body = JSON.parse(e.postData.contents);
+    const body = safeJSONParse(e.postData.contents, {});
     const action = body.action;
     const data = body.data;
     
@@ -138,7 +149,8 @@ function doPost(e) {
 }
 
 function response(data) {
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+  var dataToOutput = (data === undefined) ? null : data;
+  return ContentService.createTextOutput(JSON.stringify(dataToOutput)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function getOrCreateSheet(name) {
@@ -190,7 +202,7 @@ function saveUsers(users) {
 function getClients() {
   const sheet = getOrCreateSheet("Clients");
   const data = sheet.getDataRange().getValues();
-  const clients = data.slice(1).filter(r => r[1]).map(r => JSON.parse(r[1]));
+  const clients = data.slice(1).filter(r => r[1]).map(r => safeJSONParse(r[1], {}));
   return response({success: true, data: clients});
 }
 
@@ -253,7 +265,7 @@ function saveAssemblers(list) {
 function getManifests() {
   const sheet = getOrCreateSheet("Manifests");
   const data = sheet.getDataRange().getValues();
-  const manifests = data.slice(1).filter(r => r[1]).map(r => JSON.parse(r[1]));
+  const manifests = data.slice(1).filter(r => r[1]).map(r => safeJSONParse(r[1], {}));
   return response({success: true, data: manifests});
 }
 
@@ -273,7 +285,7 @@ function saveManifests(list) {
 
 function getFleet() {
   const vehicles = getOrCreateSheet("Vehicles").getDataRange().getValues().slice(1).filter(r => r[0]).map(r => ({ id: r[0], name: r[1], plate: r[2] }));
-  const logs = getOrCreateSheet("FleetUsage").getDataRange().getValues().slice(1).filter(r => r[1]).map(r => JSON.parse(r[1]));
+  const logs = getOrCreateSheet("FleetUsage").getDataRange().getValues().slice(1).filter(r => r[1]).map(r => safeJSONParse(r[1], {}));
   return response({ success: true, vehicles, logs });
 }
 
@@ -296,7 +308,7 @@ function saveFleet(data) {
 }
 
 function getFurnitureOrders() {
-  const list = getOrCreateSheet("FurnitureOrders").getDataRange().getValues().slice(1).filter(r => r[1]).map(r => JSON.parse(r[1]));
+  const list = getOrCreateSheet("FurnitureOrders").getDataRange().getValues().slice(1).filter(r => r[1]).map(r => safeJSONParse(r[1], {}));
   return response({success: true, data: list});
 }
 
@@ -338,7 +350,7 @@ function deleteDriveFile(data) {
 
 function getAgenda(userId) {
   const data = getOrCreateSheet("Agenda").getDataRange().getValues();
-  const items = data.slice(1).filter(r => r[0] == userId && r[2]).map(r => JSON.parse(r[2]));
+  const items = data.slice(1).filter(r => r[0] == userId && r[2]).map(r => safeJSONParse(r[2], {}));
   return response({success: true, data: items});
 }
 
@@ -373,7 +385,7 @@ function saveAgenda(userId, list) {
 
 function getAgendaIssues(userId) {
   const data = getOrCreateSheet("AgendaIssues").getDataRange().getValues();
-  const items = data.slice(1).filter(r => r[0] == userId && r[2]).map(r => JSON.parse(r[2]));
+  const items = data.slice(1).filter(r => r[0] == userId && r[2]).map(r => safeJSONParse(r[2], {}));
   return response({success: true, data: items});
 }
 
@@ -405,7 +417,7 @@ function saveAgendaIssues(userId, list) {
 function getScores() {
   const sheet = getOrCreateSheet("Scores");
   const data = sheet.getDataRange().getValues();
-  const list = data.slice(1).filter(r => r[1]).map(r => JSON.parse(r[1]));
+  const list = data.slice(1).filter(r => r[1]).map(r => safeJSONParse(r[1], {}));
   return response({success: true, data: list});
 }
 

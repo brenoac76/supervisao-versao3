@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Environment, ProjectFile, Annotation } from '../types';
 import { generateUUID, SCRIPT_URL } from '../App';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONFetch } from '../utils/api';
 import { 
     FolderIcon, 
     ArrowUpIcon, 
@@ -66,9 +66,9 @@ const ProjectFilesManager: React.FC<ProjectFilesManagerProps> = ({ environment, 
                 timeout: 60000 
             });
 
-            const result = await response.json();
+            const result = await safeJSONFetch(response);
             
-            if (result.success && result.url) {
+            if (result && result.success && result.url) {
                 const newProjectFile: ProjectFile = {
                     id: generateUUID(),
                     name: file.name,

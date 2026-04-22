@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { Client, Assembler } from '../types';
 import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import { 
     ExclamationCircleIcon, 
     PrinterIcon, 
@@ -31,6 +32,27 @@ const formatToBR = (isoString?: string) => {
     }
 };
 
+const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+        const tryLoad = (useCrossOrigin: boolean) => {
+            const img = new Image();
+            if (useCrossOrigin) {
+                img.crossOrigin = "anonymous";
+            }
+            img.onload = () => resolve(img);
+            img.onerror = () => {
+                if (useCrossOrigin) {
+                    reject(new Error("Failed to load image"));
+                } else {
+                    tryLoad(true);
+                }
+            };
+            img.src = url;
+        };
+        tryLoad(false);
+    });
+};
+
 interface PendingIssue {
     clientId: string;
     clientName: string;
@@ -58,6 +80,10 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
     const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
     const [selectedCategories, setSelectedCategories] = useState<string[]>(['Falta', 'Peça Batida', 'Geral']);
     const [isGenerating, setIsGenerating] = useState(false);
+
+    React.useEffect(() => {
+        console.log("DEBUG: jsPDF check:", jsPDF);
+    }, []);
 
     const calculateDaysOpen = (date: Date) => {
         const diffTime = Math.abs(new Date().getTime() - date.getTime());
@@ -181,7 +207,6 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
     const handleGeneratePdf = async () => {
         setIsGenerating(true);
         try {
-            const { jsPDF } = (window as any).jspdf;
             const pdf = new jsPDF('l', 'mm', 'a4'); 
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
@@ -227,7 +252,7 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
             let lastGroup = "";
 
             filteredIssues.forEach((issue, idx) => {
-                if (y > pageHeight - 20) { pdf.addPage('l', 'mm', 'a4'); y = margin + 5; }
+                if (y > pageHeight - 20) { pdf.addPage('a4', 'l'); y = margin + 5; }
 
                 const currentGroupValue = viewMode === 'BY_CLIENT' ? issue.clientName : viewMode === 'BY_CATEGORY' ? issue.category : "";
 
@@ -273,7 +298,6 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
     const handleGeneratePhotoPdf = async () => {
         setIsGenerating(true);
         try {
-            const { jsPDF } = (window as any).jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
@@ -295,7 +319,8 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
 
             addHeader("RELATÓRIO DE PENDÊNCIAS COM FOTOS");
 
-            filteredIssues.forEach((issue, idx) => {
+            for (let idx = 0; idx < filteredIssues.length; idx++) {
+                const issue = filteredIssues[idx];
                 // Check if we need a new page for the next issue
                 if (y > pageHeight - 40) {
                     pdf.addPage();
@@ -326,7 +351,8 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
                         const imgWidth = (pageWidth - (margin * 2) - 10) / 2;
                         const imgHeight = imgWidth * 0.75;
                         
-                        photos.forEach((photo, pIdx) => {
+                        for (let pIdx = 0; pIdx < photos.length; pIdx++) {
+                            const photo = photos[pIdx];
                             if (y + imgHeight > pageHeight - 20) {
                                 pdf.addPage();
                                 y = margin;
@@ -334,21 +360,41 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
                             }
 
                             const xPos = margin + (pIdx % 2 === 0 ? 0 : imgWidth + 10);
+                            
                             try {
-                                pdf.addImage(photo.url, 'JPEG', xPos, y, imgWidth, imgHeight);
+                                const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(photo.url)}`;
+                                const imgData = await new Promise<string>((resolve, reject) => {
+                                    const img = new Image();
+                                    // Com o proxy, não precisa de crossOrigin
+                                    img.onload = () => {
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = img.width;
+                                        canvas.height = img.height;
+                                        const ctx = canvas.getContext('2d');
+                                        if (!ctx) return reject('Canvas context not found');
+                                        ctx.drawImage(img, 0, 0);
+                                        resolve(canvas.toDataURL('image/jpeg'));
+                                    };
+                                    img.onerror = () => reject('Failed to load image');
+                                    img.src = proxyUrl;
+                                });
+                                
+                                pdf.addImage(imgData, 'JPEG', xPos, y, imgWidth, imgHeight);
                                 if (photo.observation) {
                                     pdf.setFontSize(7).setTextColor(100);
                                     pdf.text(pdf.splitTextToSize(photo.observation, imgWidth), xPos, y + imgHeight + 4);
                                 }
                             } catch (err) {
+                                console.error("Error adding image via proxy:", err);
                                 pdf.rect(xPos, y, imgWidth, imgHeight);
-                                pdf.text("Erro ao carregar imagem", xPos + 5, y + imgHeight / 2);
+                                pdf.setFontSize(7).setTextColor(200, 0, 0);
+                                pdf.text("Foto indisponível", xPos + 5, y + imgHeight / 2);
                             }
 
                             if (pIdx % 2 !== 0 || pIdx === photos.length - 1) {
                                 y += imgHeight + 15;
                             }
-                        });
+                        }
                     } else {
                         pdf.setFont('helvetica', 'italic').setFontSize(8).setTextColor(150);
                         pdf.text("Nenhuma foto disponível para esta pendência.", margin + 5, y);
@@ -361,7 +407,7 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
                 }
 
                 y += 5; // Spacer between issues
-            });
+            }
 
             pdf.save(`relatorio_fotos_pendencias_${new Date().toISOString().split('T')[0]}.pdf`);
         } catch (e) { 

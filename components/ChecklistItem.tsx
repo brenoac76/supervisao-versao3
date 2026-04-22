@@ -4,7 +4,7 @@ import { ChecklistItem, ChecklistStatus, Media, Assembler } from '../types';
 import Modal from './Modal';
 import { CameraIcon, CheckCircleIcon, ExclamationCircleIcon, TrashIcon, VideoCameraIcon, PaperClipIcon, ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, RefreshIcon, UserIcon, CalendarIcon, CubeIcon, PlusCircleIcon, PencilIcon, XIcon } from './icons';
 import { SCRIPT_URL, generateUUID } from '../App';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONFetch } from '../utils/api';
 
 // Helper para converter string YYYY-MM-DD para exibição BR DD/MM/AAAA sem fuso horário
 const toDisplayDate = (dateStr?: string) => {
@@ -316,8 +316,8 @@ const ChecklistItemComponent: React.FC<ChecklistItemProps> = ({ item, assemblers
           data: { base64Data, fileName: file.name, mimeType: mimeType }
         }),
       });
-      const result = await response.json();
-      if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+      const result = await safeJSONFetch(response);
+      if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
       
       const finalMedia: Media = { ...tempMedia, url: result.url };
       URL.revokeObjectURL(localUrl);

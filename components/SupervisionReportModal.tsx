@@ -20,7 +20,7 @@ import {
 } from './icons';
 import { jsPDF } from 'jspdf';
 import { SCRIPT_URL, generateUUID } from '../App';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry, safeJSONFetch } from '../utils/api';
 
 interface SupervisionReportModalProps {
   client: Client;
@@ -177,8 +177,8 @@ const SupervisionReportModal: React.FC<SupervisionReportModalProps> = ({ client,
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'UPLOAD_FILE', data: { base64Data, fileName: file.name, mimeType: mimeType } }),
       });
-      const result = await response.json();
-      if (!result.success || !result.url) throw new Error(result.message || 'Falha no upload');
+      const result = await safeJSONFetch(response);
+      if (!result || !result.success || !result.url) throw new Error(result?.message || 'Falha no upload');
       
       setReportMedia(prev => prev.map(m => m.id === tempId ? { ...m, url: result.url } : m));
     } catch (error: any) {
@@ -232,7 +232,7 @@ const SupervisionReportModal: React.FC<SupervisionReportModalProps> = ({ client,
 
     // --- Header Logo ---
     try {
-        const logoRes = await fetch(`${SCRIPT_URL}?action=GET_LOGO`).then(r => r.json());
+        const logoRes = await fetch(`${SCRIPT_URL}?action=GET_LOGO`).then(safeJSONFetch);
         if (logoRes.success && logoRes.url) {
             const displayUrl = getDisplayableDriveUrl(logoRes.url);
             const imgResponse = await fetch(displayUrl);
