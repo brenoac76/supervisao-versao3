@@ -4,6 +4,7 @@ import { Client, ChecklistStatus, Assembler, Media } from '../types';
 import AddClientForm from './AddClientForm';
 import ClientProgressCircle from './ClientProgressCircle';
 import Modal from './Modal';
+import { jsPDF } from 'jspdf';
 import { 
     PlusCircleIcon, 
     SearchIcon, 
@@ -219,7 +220,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ clients, assemblers = [], onSel
   const handlePrintIssues = async (client: Client) => {
       setIsGeneratingPdf(true);
       try {
-          const { jsPDF } = (window as any).jspdf;
           const pdf = new jsPDF('p', 'mm', 'a4');
           const issues = getDetailedIssues(client);
           const margin = 15;

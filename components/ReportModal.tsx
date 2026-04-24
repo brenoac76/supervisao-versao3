@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Client, ChecklistStatus, Environment, Media } from '../types';
 import Modal from './Modal';
 import { DocumentTextIcon } from './icons';
+import { jsPDF } from 'jspdf';
 
 interface ReportModalProps {
   client: Client;
@@ -35,13 +36,6 @@ const ReportModal: React.FC<ReportModalProps> = ({ client, onClose }) => {
     const handleGeneratePdf = async () => {
         setIsGenerating(true);
         try {
-            if (!(window as any).jspdf) {
-                alert("A biblioteca PDF não foi carregada.");
-                setIsGenerating(false);
-                return;
-            }
-
-            const { jsPDF } = (window as any).jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageHeight = Number(pdf.internal.pageSize.getHeight());
             const pageWidth = Number(pdf.internal.pageSize.getWidth());

@@ -129,7 +129,6 @@ const AstecaReport: React.FC<AstecaReportProps> = ({ clients, onNavigate }) => {
     const handleGeneratePdf = async () => {
         setIsGenerating(true);
         try {
-            const { jsPDF } = (window as any).jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();

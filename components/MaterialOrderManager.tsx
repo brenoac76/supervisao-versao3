@@ -4,6 +4,7 @@ import { Client, MaterialOrder, MaterialOrderItem, Media } from '../types';
 import { generateUUID, SCRIPT_URL } from '../App';
 import { fetchWithRetry, safeJSONParse } from '../utils/api';
 import Modal from './Modal';
+import { jsPDF } from 'jspdf';
 import { 
   ShoppingCartIcon, 
   PlusCircleIcon, 
@@ -147,8 +148,7 @@ const MaterialOrderManager: React.FC<MaterialOrderManagerProps> = ({ client, onU
   };
 
   const generateFinalPdf = async () => {
-    if (!(window as any).jspdf || !reviewOrder) return;
-    const { jsPDF } = (window as any).jspdf;
+    if (!reviewOrder) return;
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = 210;
     const margin = 15;

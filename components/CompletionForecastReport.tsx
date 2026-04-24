@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Client, Assembler, ChecklistStatus, Environment } from '../types';
+import { jsPDF } from 'jspdf';
 import { 
     CalendarIcon, 
     PrinterIcon, 
@@ -130,7 +131,6 @@ const CompletionForecastReport: React.FC<CompletionForecastReportProps> = ({ cli
     const handleGeneratePdf = async () => {
         setIsGenerating(true);
         try {
-            const { jsPDF } = (window as any).jspdf;
             const pdf = new jsPDF('l', 'mm', 'a4');
             const pageWidth = pdf.internal.pageSize.getWidth();
             const margin = 10;
