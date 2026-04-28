@@ -106,8 +106,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
   const [issueClient, setIssueClient] = useState('');
   const [issueDate, setIssueDate] = useState(getLocalYYYYMMDD());
-  const [formTopics, setFormTopics] = useState<{ id: string; description: string; media: Media[]; status: 'Pending' | 'Resolved'; date: string; isAsteca?: boolean }[]>([
-    { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false }
+  const [formTopics, setFormTopics] = useState<{ id: string; description: string; media: Media[]; status: 'Pending' | 'Resolved'; date: string; isAsteca?: boolean; observation?: string }[]>([
+    { id: generateUUID(), description: '', media: [], status: 'Pending', date: getLocalYYYYMMDD(), isAsteca: false, observation: '' }
   ]);
   const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
   const [editingMedia, setEditingMedia] = useState<{ media: Media; topicId: string } | null>(null);
@@ -326,14 +326,15 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       
       // Robust normalization for editing
       const topics = originalIssue.topics && originalIssue.topics.length > 0 
-        ? originalIssue.topics.map(t => ({ ...t, date: t.date || originalIssue.date, isAsteca: !!t.isAsteca })) 
+        ? originalIssue.topics.map(t => ({ ...t, date: t.date || originalIssue.date, isAsteca: !!t.isAsteca, observation: t.observation || '' })) 
         : [{ 
-            id: originalIssue.id, 
+            id: generateUUID(), 
             description: (originalIssue as any).description || '', 
             media: (originalIssue as any).media || [], 
             status: (originalIssue as any).status || 'Pending', 
             date: originalIssue.date,
-            isAsteca: false
+            isAsteca: false,
+            observation: ''
           }];
           
       setFormTopics(topics);
@@ -720,13 +721,15 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           }
 
           const startY = y;
-          const padding = 5;
+          
+          // Compact Report: Padding and Font adjustments
+          const padding = 3;
           
           // Description
           const isResolved = topic.status === 'Resolved';
           const isAsteca = topic.isAsteca;
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
+          doc.setFontSize(9);
           
           if (isResolved) {
               doc.setTextColor(34, 197, 94); // text-green-500
@@ -739,9 +742,19 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
           const descriptionText = isAsteca ? `[ASTECA] ${topic.description}` : topic.description;
           const splitDescription = doc.splitTextToSize(descriptionText, pageWidth - 2 * margin - (padding * 2));
           
-          // Start description below the top margin to leave space for the badge
-          const descY = y + padding + 8; 
+          const descY = y + padding + 5; 
           doc.text(splitDescription, margin + padding, descY);
+
+          // Inclusion of Observation Field
+          let obsY = descY + (splitDescription.length * 4) + 1;
+          if (topic.observation) {
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(8);
+            doc.setTextColor(50);
+            const splitObs = doc.splitTextToSize(`Obs: ${topic.observation}`, pageWidth - 2 * margin - (padding * 2));
+            doc.text(splitObs, margin + padding, obsY);
+            obsY += (splitObs.length * 4) + 1;
+          }
 
           if (isResolved) {
               doc.setDrawColor(34, 197, 94);
@@ -757,12 +770,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
               }
           }
 
-          y = descY + (splitDescription.length * 5) + 2;
+          y = obsY + 2;
 
-          // Add Photos
+          // Add Photos (Smaller Images)
           if (topic.media && topic.media.length > 0) {
-              const imgSize = 70;
-              const gap = 5;
+              const imgSize = 40; // Smaller images
+              const gap = 3;
               let x = margin + padding;
 
               for (const media of topic.media) {
@@ -772,14 +785,12 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                   }
 
                   if (y + imgSize > pageHeight - margin) {
-                      // If we need a new page for photos, we close the current box and start a new one on the next page
                       doc.setDrawColor(200);
                       doc.rect(margin, startY, pageWidth - 2 * margin, y - startY + 2);
                       
                       doc.addPage();
                       y = 20;
                       x = margin + padding;
-                      // Note: This is a simplified approach, ideally the box would continue
                   }
 
                   try {
@@ -1000,19 +1011,19 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             <div className="flex bg-slate-100 p-1 rounded-xl flex-grow sm:flex-grow-0">
               <button 
                 onClick={() => setFilter('PENDING')}
-                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 sm:flex-none w-[97.586px] py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
               >
                 Pendentes
               </button>
               <button 
                 onClick={() => setFilter('ASTECA')}
-                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 sm:flex-none pl-6 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
               >
                 ASTECAS
               </button>
               <button 
                 onClick={() => setFilter('DONE')}
-                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 sm:flex-none pl-4 pr-[14px] py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
               >
                 Concluídos
               </button>
@@ -1234,6 +1245,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                       >
                         <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === editingTopic.topic.id ? 'animate-pulse' : ''}`} />
                       </button>
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Observação</label>
+                      <textarea 
+                        value={editingTopic.topic.observation || ''} 
+                        onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, observation: e.target.value } })}
+                        className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
+                        placeholder="Observações adicionais..." 
+                      />
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1648,8 +1669,8 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
       {/* Edit Topic Modal */}
       {editingTopic && (
         <Modal onClose={() => setEditingTopic(null)}>
-          <div className="animate-fadeIn">
-            <h3 className="font-normal text-slate-800 uppercase text-sm tracking-widest mb-6 pr-8 sm:pr-0">Editar Item da Pendência</h3>
+          <div className="animate-fadeIn text-[#1a3cce]">
+            <h3 className="font-normal text-[#1259ce] uppercase text-sm tracking-widest mb-6 pr-8 sm:pr-0 font-sans">Editar Item da Pendência</h3>
             <form onSubmit={handleSaveSingleTopic} className="space-y-5">
               <div className="space-y-4">
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
@@ -1676,6 +1697,16 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                       >
                         <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === editingTopic.topic.id ? 'animate-pulse' : ''}`} />
                       </button>
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-[10px] font-normal text-slate-500 uppercase mb-1.5 tracking-wider">Observação</label>
+                      <textarea 
+                        value={editingTopic.topic.observation || ''} 
+                        onChange={e => setEditingTopic({ ...editingTopic, topic: { ...editingTopic.topic, observation: e.target.value } })}
+                        className="w-full p-3 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm h-20 resize-none bg-white transition-all" 
+                        placeholder="Observações adicionais..." 
+                      />
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1815,7 +1846,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                     <div className="flex flex-col sm:flex-row gap-3">
                                         <div className="flex gap-3 flex-grow">
                                             <span className="text-slate-400 font-bold text-sm mt-2">{index + 1}.</span>
-                                            <div className="relative flex-grow">
+                                            <div className="relative flex-grow flex flex-col gap-2">
                                                 <textarea 
                                                     required 
                                                     value={topic.description} 
@@ -1827,7 +1858,7 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                     type="button"
                                                     onClick={() => handleProfessionalizeText(topic.description, 'topic', topic.id)}
                                                     disabled={isProfessionalizing === topic.id}
-                                                    className={`absolute right-2 bottom-2 p-1.5 rounded-lg transition-all ${
+                                                    className={`absolute right-2 top-2 p-1.5 rounded-lg transition-all ${
                                                         isProfessionalizing === topic.id 
                                                         ? 'bg-slate-100 text-slate-400' 
                                                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
@@ -1836,6 +1867,13 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
                                                 >
                                                     <SparklesIcon className={`w-4 h-4 ${isProfessionalizing === topic.id ? 'animate-pulse' : ''}`} />
                                                 </button>
+                                                
+                                                <textarea 
+                                                    value={topic.observation || ''} 
+                                                    onChange={e => setFormTopics(formTopics.map(t => t.id === topic.id ? { ...t, observation: e.target.value } : t))}
+                                                    className="w-full p-2 border-2 border-slate-100 rounded-xl focus:border-blue-500 outline-none font-normal text-sm bg-white transition-all" 
+                                                    placeholder="Observação (opcional)..." 
+                                                />
                                             </div>
                                         </div>
                                         <div className="sm:w-40 space-y-2">

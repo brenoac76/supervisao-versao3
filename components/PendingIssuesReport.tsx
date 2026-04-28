@@ -64,6 +64,7 @@ interface PendingIssue {
     category: 'Falta' | 'Peça Batida' | 'Geral';
     source: 'Pós-Obra';
     media?: any[];
+    observation?: string;
 }
 
 interface PendingIssuesReportProps {
@@ -111,7 +112,8 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
                                         assemblerName: ass?.name,
                                         category: (iss.category as any) || 'Geral',
                                         source: 'Pós-Obra',
-                                        media: iss.media
+                                        media: iss.media,
+                                        observation: iss.observations
                                     });
                                 }
                             });
@@ -306,15 +308,15 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
 
             const addHeader = (title: string) => {
                 pdf.setFont('helvetica', 'bold');
-                pdf.setFontSize(14);
+                pdf.setFontSize(10);
                 pdf.setTextColor(30, 41, 59);
                 pdf.text(title, pageWidth / 2, y + 5, { align: 'center' });
-                y += 12;
-                pdf.setFontSize(8);
+                y += 8;
+                pdf.setFontSize(6);
                 pdf.setFont('helvetica', 'normal');
                 pdf.setTextColor(100);
                 pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, margin, y);
-                y += 8;
+                y += 4;
             };
 
             addHeader("RELATÓRIO DE PENDÊNCIAS COM FOTOS");
@@ -322,50 +324,57 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
             for (let idx = 0; idx < filteredIssues.length; idx++) {
                 const issue = filteredIssues[idx];
                 // Check if we need a new page for the next issue
-                if (y > pageHeight - 40) {
+                if (y > pageHeight - 25) {
                     pdf.addPage();
                     y = margin;
                     addHeader("RELATÓRIO DE PENDÊNCIAS COM FOTOS (CONT.)");
                 }
 
                 // Issue Header
-                pdf.setFillColor(240, 244, 248);
-                pdf.rect(margin, y, pageWidth - (margin * 2), 25, 'F');
-                pdf.setFont('helvetica', 'bold').setFontSize(10).setTextColor(30, 58, 138);
-                pdf.text(`PENDÊNCIA #${idx + 1}: ${issue.clientName.toUpperCase()}`, margin + 5, y + 7);
+                pdf.setFillColor(245, 247, 250);
+                pdf.rect(margin, y, pageWidth - (margin * 2), 20, 'F');
+                pdf.setFont('helvetica', 'bold').setFontSize(7).setTextColor(30, 58, 138);
+                pdf.text(`PENDÊNCIA #${idx + 1}: ${issue.clientName.toUpperCase()}`, margin + 2, y + 4);
                 
-                pdf.setFont('helvetica', 'normal').setFontSize(8).setTextColor(71, 85, 105);
-                pdf.text(`Data: ${formatToBR(issue.date.toISOString())}`, margin + 5, y + 13);
-                pdf.text(`Local/Tipo: ${issue.location} [${issue.category}]`, margin + 5, y + 18);
+                pdf.setFont('helvetica', 'normal').setFontSize(6).setTextColor(71, 85, 105);
+                pdf.text(`Data: ${formatToBR(issue.date.toISOString())} | Local: ${issue.location} | Tipo: [${issue.category}]`, margin + 2, y + 8);
                 
-                pdf.setFont('helvetica', 'bold').setTextColor(0);
-                const descLines = pdf.splitTextToSize(`Descrição: ${issue.description}`, pageWidth - (margin * 2) - 10);
-                pdf.text(descLines, margin + 5, y + 23);
+                pdf.setFont('helvetica', 'bold').setTextColor(0).setFontSize(6);
+                const descLines = pdf.splitTextToSize(`Descrição: ${issue.description}`, pageWidth - (margin * 2) - 4);
+                pdf.text(descLines, margin + 2, y + 12);
                 
-                y += 30 + (descLines.length > 1 ? (descLines.length - 1) * 4 : 0);
+                let currentYOffset = 14 + (descLines.length * 2.5);
+                
+                if (issue.observation) {
+                    pdf.setFont('helvetica', 'italic').setFontSize(6).setTextColor(50);
+                    const obsLines = pdf.splitTextToSize(`Obs: ${issue.observation}`, pageWidth - (margin * 2) - 4);
+                    pdf.text(obsLines, margin + 2, y + currentYOffset);
+                    currentYOffset += (obsLines.length * 2.5) + 1;
+                }
+                
+                y += currentYOffset + 2;
 
                 // Photos
                 if (issue.media && issue.media.length > 0) {
                     const photos = issue.media.filter(m => m.type === 'image');
                     if (photos.length > 0) {
-                        const imgWidth = (pageWidth - (margin * 2) - 10) / 2;
+                        const imgWidth = (pageWidth - (margin * 2) - 10) / 3; // 3 columns
                         const imgHeight = imgWidth * 0.75;
                         
                         for (let pIdx = 0; pIdx < photos.length; pIdx++) {
                             const photo = photos[pIdx];
-                            if (y + imgHeight > pageHeight - 20) {
+                            if (y + imgHeight > pageHeight - 10) {
                                 pdf.addPage();
                                 y = margin;
                                 addHeader("FOTOS DA PENDÊNCIA (CONT.)");
                             }
 
-                            const xPos = margin + (pIdx % 2 === 0 ? 0 : imgWidth + 10);
+                            const xPos = margin + (pIdx % 3) * (imgWidth + 2);
                             
                             try {
                                 const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(photo.url)}`;
                                 const imgData = await new Promise<string>((resolve, reject) => {
                                     const img = new Image();
-                                    // Com o proxy, não precisa de crossOrigin
                                     img.onload = () => {
                                         const canvas = document.createElement('canvas');
                                         canvas.width = img.width;
@@ -381,32 +390,32 @@ const PendingIssuesReport: React.FC<PendingIssuesReportProps> = ({ clients, asse
                                 
                                 pdf.addImage(imgData, 'JPEG', xPos, y, imgWidth, imgHeight);
                                 if (photo.observation) {
-                                    pdf.setFontSize(7).setTextColor(100);
-                                    pdf.text(pdf.splitTextToSize(photo.observation, imgWidth), xPos, y + imgHeight + 4);
+                                    pdf.setFontSize(5).setTextColor(100);
+                                    pdf.text(pdf.splitTextToSize(photo.observation, imgWidth), xPos, y + imgHeight + 2);
                                 }
                             } catch (err) {
                                 console.error("Error adding image via proxy:", err);
                                 pdf.rect(xPos, y, imgWidth, imgHeight);
-                                pdf.setFontSize(7).setTextColor(200, 0, 0);
-                                pdf.text("Foto indisponível", xPos + 5, y + imgHeight / 2);
+                                pdf.setFontSize(5).setTextColor(200, 0, 0);
+                                pdf.text("Foto indisponível", xPos + 1, y + imgHeight / 2);
                             }
 
-                            if (pIdx % 2 !== 0 || pIdx === photos.length - 1) {
-                                y += imgHeight + 15;
+                            if ((pIdx + 1) % 3 === 0 || pIdx === photos.length - 1) {
+                                y += imgHeight + 6;
                             }
                         }
                     } else {
-                        pdf.setFont('helvetica', 'italic').setFontSize(8).setTextColor(150);
-                        pdf.text("Nenhuma foto disponível para esta pendência.", margin + 5, y);
-                        y += 10;
+                        pdf.setFont('helvetica', 'italic').setFontSize(6).setTextColor(150);
+                        pdf.text("Nenhuma foto disponível.", margin + 2, y);
+                        y += 6;
                     }
                 } else {
-                    pdf.setFont('helvetica', 'italic').setFontSize(8).setTextColor(150);
-                    pdf.text("Nenhuma foto disponível para esta pendência.", margin + 5, y);
-                    y += 10;
+                    pdf.setFont('helvetica', 'italic').setFontSize(6).setTextColor(150);
+                    pdf.text("Nenhuma foto disponível.", margin + 2, y);
+                    y += 6;
                 }
 
-                y += 5; // Spacer between issues
+                y += 2; // Spacer between issues
             }
 
             pdf.save(`relatorio_fotos_pendencias_${new Date().toISOString().split('T')[0]}.pdf`);

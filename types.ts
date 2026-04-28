@@ -79,6 +79,7 @@ export interface AgendaTopic {
   status: 'Pending' | 'Resolved';
   date: string; // Mandatory date per topic
   isAsteca?: boolean;
+  observation?: string;
 }
 
 export interface AgendaIssue {
