@@ -1011,19 +1011,19 @@ const PersonalAgenda: React.FC<PersonalAgendaProps> = ({ user, agenda, agendaIss
             <div className="flex bg-slate-100 p-1 rounded-xl flex-grow sm:flex-grow-0">
               <button 
                 onClick={() => setFilter('PENDING')}
-                className={`flex-1 sm:flex-none w-[97.586px] py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all text-center ${filter === 'PENDING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
               >
                 Pendentes
               </button>
               <button 
                 onClick={() => setFilter('ASTECA')}
-                className={`flex-1 sm:flex-none pl-6 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all text-center ${filter === 'ASTECA' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'}`}
               >
                 ASTECAS
               </button>
               <button 
                 onClick={() => setFilter('DONE')}
-                className={`flex-1 sm:flex-none pl-4 pr-[14px] py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
+                className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-normal uppercase tracking-widest transition-all text-center ${filter === 'DONE' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
               >
                 Concluídos
               </button>
